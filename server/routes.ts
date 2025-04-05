@@ -3,7 +3,19 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import MemoryStore from "memorystore";
 import { storage } from "./storage";
-import { loginUserSchema, insertUserSchema, transferFundsSchema, billPaymentSchema } from "@shared/schema";
+import { 
+  loginUserSchema, 
+  insertUserSchema, 
+  transferFundsSchema, 
+  billPaymentSchema,
+  insertExternalBankAccountSchema,
+  internationalTransferSchema
+} from "@shared/schema";
+import { 
+  getCurrencyInfo, 
+  getTransferConversionDetails, 
+  Currency
+} from "./services/currencyService";
 import { nanoid } from "nanoid";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -343,6 +355,360 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json({ message: "Bill payment completed successfully", reference });
     } catch (error) {
       res.status(500).json({ message: "An error occurred during bill payment" });
+    }
+  });
+
+  // External Bank Account Routes
+  app.get("/api/external-bank-accounts", requireAuth, async (req, res) => {
+    try {
+      const accounts = await storage.getUserExternalBankAccounts(req.session.userId as number);
+      res.json(accounts);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching external bank accounts" });
+    }
+  });
+
+  app.get("/api/external-bank-accounts/:id", requireAuth, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      const account = await storage.getExternalBankAccount(accountId);
+      
+      if (!account) {
+        return res.status(404).json({ message: "External bank account not found" });
+      }
+      
+      // Check if the account belongs to the current user
+      if (account.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      res.json(account);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching external bank account" });
+    }
+  });
+
+  app.post("/api/external-bank-accounts", requireAuth, async (req, res) => {
+    try {
+      const validatedData = insertExternalBankAccountSchema.safeParse(req.body);
+      
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      // Add the current user's ID to the data
+      const accountData = {
+        ...validatedData.data,
+        userId: req.session.userId as number,
+      };
+      
+      const account = await storage.createExternalBankAccount(accountData);
+      res.status(201).json(account);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while creating external bank account" });
+    }
+  });
+
+  app.put("/api/external-bank-accounts/:id", requireAuth, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      const account = await storage.getExternalBankAccount(accountId);
+      
+      if (!account) {
+        return res.status(404).json({ message: "External bank account not found" });
+      }
+      
+      // Check if the account belongs to the current user
+      if (account.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const validatedData = insertExternalBankAccountSchema.partial().safeParse(req.body);
+      
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      const updatedAccount = await storage.updateExternalBankAccount(accountId, validatedData.data);
+      res.json(updatedAccount);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while updating external bank account" });
+    }
+  });
+
+  app.delete("/api/external-bank-accounts/:id", requireAuth, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      const account = await storage.getExternalBankAccount(accountId);
+      
+      if (!account) {
+        return res.status(404).json({ message: "External bank account not found" });
+      }
+      
+      // Check if the account belongs to the current user
+      if (account.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      await storage.deleteExternalBankAccount(accountId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while deleting external bank account" });
+    }
+  });
+
+  // International Transfer Routes
+  app.get("/api/international-transfers", requireAuth, async (req, res) => {
+    try {
+      const transfers = await storage.getUserInternationalTransfers(req.session.userId as number);
+      res.json(transfers);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching international transfers" });
+    }
+  });
+
+  app.get("/api/accounts/:id/international-transfers", requireAuth, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      const account = await storage.getAccount(accountId);
+      
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      
+      // Check if the account belongs to the current user
+      if (account.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const transfers = await storage.getAccountInternationalTransfers(accountId);
+      res.json(transfers);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching international transfers" });
+    }
+  });
+
+  app.post("/api/international-transfers", requireAuth, async (req, res) => {
+    try {
+      const validatedData = internationalTransferSchema.safeParse(req.body);
+      
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      const { sourceAccountId, externalAccountId, amount, purposeOfTransfer } = validatedData.data;
+      const transferAmount = parseFloat(amount);
+      
+      if (isNaN(transferAmount) || transferAmount <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+      
+      // Get source account
+      const sourceAccount = await storage.getAccount(sourceAccountId);
+      if (!sourceAccount) {
+        return res.status(404).json({ message: "Source account not found" });
+      }
+      
+      // Check if the source account belongs to the current user
+      if (sourceAccount.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Get external account
+      const externalAccount = await storage.getExternalBankAccount(externalAccountId);
+      if (!externalAccount) {
+        return res.status(404).json({ message: "External bank account not found" });
+      }
+      
+      // Check if the external account belongs to the current user
+      if (externalAccount.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Get source and target currencies
+      const sourceCurrency = sourceAccount.currency || "USD";
+      const targetCurrency = externalAccount.currency;
+      
+      // Calculate conversion details and fees using the currency service
+      const conversionDetails = getTransferConversionDetails(
+        transferAmount,
+        sourceCurrency as Currency,
+        targetCurrency as Currency
+      );
+      
+      const { 
+        exchangeRate, 
+        fee: feeAmount, 
+        amountAfterFee,
+        convertedAmount 
+      } = conversionDetails;
+      
+      const totalAmount = transferAmount + feeAmount;
+      
+      // Check if there is enough balance (including fees)
+      if (parseFloat(sourceAccount.balance.toString()) < totalAmount) {
+        return res.status(400).json({ message: "Insufficient funds (including fees)" });
+      }
+      
+      // Generate reference
+      const reference = `INT${nanoid(8).toUpperCase()}`;
+      
+      // Create international transfer
+      const transfer = await storage.createInternationalTransfer({
+        sourceAccountId,
+        externalAccountId,
+        amount: transferAmount.toString(),
+        exchangeRate: exchangeRate.toString(),
+        sourceCurrency,
+        targetCurrency,
+        fees: feeAmount.toString(),
+        totalDebit: totalAmount.toString(),
+        reference,
+        purposeOfTransfer,
+        status: "pending", // Start as pending
+        estimatedDelivery: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
+      });
+      
+      // Create transaction for the debit
+      await storage.createTransaction({
+        accountId: sourceAccountId,
+        amount: totalAmount.toString(),
+        type: "withdrawal",
+        description: `International Transfer to ${externalAccount.accountName} (${externalAccount.bankName})`,
+        reference,
+        status: "completed",
+        receiverAccount: externalAccount.accountNumber,
+      });
+      
+      // Update account balance
+      await storage.updateAccountBalance(sourceAccountId, -totalAmount);
+      
+      // In a real app, we would have a background job that processes the transfers
+      // and updates their status. For now, we'll simulate success after a delay
+      setTimeout(async () => {
+        await storage.updateInternationalTransferStatus(transfer.id, "completed");
+      }, 30000); // 30 seconds delay for demo purposes
+      
+      res.status(201).json({ 
+        message: "International transfer initiated successfully", 
+        reference,
+        estimatedDelivery: transfer.estimatedDelivery,
+        transferId: transfer.id,
+        conversionDetails: {
+          exchangeRate,
+          fee: feeAmount,
+          amountAfterFee,
+          convertedAmount,
+          sourceCurrency,
+          targetCurrency
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred during international transfer" });
+    }
+  });
+
+  app.get("/api/international-transfers/:id", requireAuth, async (req, res) => {
+    try {
+      const transferId = parseInt(req.params.id);
+      const transfer = await storage.getInternationalTransfer(transferId);
+      
+      if (!transfer) {
+        return res.status(404).json({ message: "International transfer not found" });
+      }
+      
+      // Get source account to check ownership
+      const sourceAccount = await storage.getAccount(transfer.sourceAccountId);
+      if (!sourceAccount) {
+        return res.status(404).json({ message: "Source account not found" });
+      }
+      
+      // Check if the source account belongs to the current user
+      if (sourceAccount.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Get source and target currencies
+      const sourceCurrency = transfer.sourceCurrency as Currency;
+      const targetCurrency = transfer.targetCurrency as Currency;
+      
+      // Calculate current conversion details
+      const currentConversionDetails = getTransferConversionDetails(
+        parseFloat(transfer.amount),
+        sourceCurrency,
+        targetCurrency
+      );
+      
+      // Create response with both original and current conversion details
+      const response = {
+        ...transfer,
+        currentConversionDetails: {
+          exchangeRate: currentConversionDetails.exchangeRate,
+          convertedAmount: currentConversionDetails.convertedAmount,
+          fee: currentConversionDetails.fee,
+          amountAfterFee: currentConversionDetails.amountAfterFee
+        },
+        originalExchangeRate: parseFloat(transfer.exchangeRate || "1")
+      };
+      
+      res.json(response);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching international transfer" });
+    }
+  });
+
+  // Currency routes
+  app.get("/api/currencies", async (req, res) => {
+    try {
+      const currencies = getCurrencyInfo();
+      res.json(currencies);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching currencies" });
+    }
+  });
+
+  app.post("/api/currencies/convert", async (req, res) => {
+    try {
+      const { amount, fromCurrency, toCurrency } = req.body;
+      
+      if (!amount || !fromCurrency || !toCurrency) {
+        return res.status(400).json({ 
+          message: "Missing required fields", 
+          errors: ["amount, fromCurrency, and toCurrency are required"] 
+        });
+      }
+      
+      const numericAmount = parseFloat(amount);
+      
+      if (isNaN(numericAmount) || numericAmount <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+      
+      // Check if currencies are valid
+      const validCurrencies = Object.values(Currency);
+      if (!validCurrencies.includes(fromCurrency as Currency) || 
+          !validCurrencies.includes(toCurrency as Currency)) {
+        return res.status(400).json({ message: "Invalid currency code" });
+      }
+      
+      const conversionDetails = getTransferConversionDetails(
+        numericAmount,
+        fromCurrency as Currency,
+        toCurrency as Currency
+      );
+      
+      res.json(conversionDetails);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred during currency conversion" });
     }
   });
 
