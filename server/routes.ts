@@ -20,7 +20,8 @@ import {
   insertCryptoTransferRequestSchema,
   approveCryptoTransferSchema,
   transactionCategorizationSchema,
-  categorySuggestionSchema
+  categorySuggestionSchema,
+  insertAccountSchema
 } from "@shared/schema";
 import { suggestTransactionCategory, getSimilarCategorizedTransactions } from "./services/openai";
 import { 
@@ -30,6 +31,7 @@ import {
 } from "./services/currencyService";
 import { generateStatementData, generatePdfStatement } from "./services/statementService";
 import { nanoid } from "nanoid";
+import { generateRandomAccountNumber } from "./utils";
 
 // Helper function to get userId from session
 function getUserId(req: Request): number | undefined {
@@ -176,6 +178,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(account);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching account" });
+    }
+  });
+  
+  // Create a new account with random account number
+  app.post("/api/accounts", requireAuth, async (req, res) => {
+    try {
+      const validatedData = insertAccountSchema.safeParse(req.body);
+      
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      // Add the current user's ID to the data
+      const userId = req.session.userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      // Generate a random account number
+      const accountNumber = generateRandomAccountNumber();
+      
+      // Create the account data
+      const accountData = {
+        ...validatedData.data,
+        userId,
+        accountNumber,
+      };
+      
+      // Create the account
+      const account = await storage.createAccount(accountData);
+      res.status(201).json(account);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while creating account" });
     }
   });
   
