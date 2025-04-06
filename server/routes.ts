@@ -9,7 +9,16 @@ import {
   transferFundsSchema, 
   billPaymentSchema,
   insertExternalBankAccountSchema,
-  internationalTransferSchema
+  internationalTransferSchema,
+  insertLoanSchema,
+  insertLoanApplicationSchema,
+  loanApplicationRequestSchema,
+  approveLoanSchema,
+  rejectLoanSchema,
+  cryptoPurchaseSchema,
+  cryptoExchangeSchema,
+  insertCryptoTransferRequestSchema,
+  approveCryptoTransferSchema
 } from "@shared/schema";
 import { 
   getCurrencyInfo, 
@@ -62,7 +71,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Store user ID in session
-      req.session.userId = user.id;
+      (req.session as any).userId = user.id;
       
       // Return user data without password
       const { password: _, ...userData } = user;
@@ -94,7 +103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser(userData);
       
       // Store user ID in session
-      req.session.userId = user.id;
+      (req.session as any).userId = user.id;
       
       // Return user data without password
       const { password, ...newUserData } = user;
@@ -105,12 +114,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   app.get("/api/auth/session", async (req, res) => {
-    if (!req.session.userId) {
+    if (!(req.session as any).userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
     
     try {
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser((req.session as any).userId);
       
       if (!user) {
         req.session.destroy(() => {});
@@ -134,7 +143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Account Routes
   app.get("/api/accounts", requireAuth, async (req, res) => {
     try {
-      const accounts = await storage.getUserAccounts(req.session.userId as number);
+      const accounts = await storage.getUserAccounts((req.session as any).userId as number);
       res.json(accounts);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching accounts" });
@@ -151,7 +160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== req.session.userId) {
+      if (account.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -164,7 +173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Transaction Routes
   app.get("/api/transactions", requireAuth, async (req, res) => {
     try {
-      const transactions = await storage.getUserTransactions(req.session.userId as number);
+      const transactions = await storage.getUserTransactions((req.session as any).userId as number);
       res.json(transactions);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching transactions" });
@@ -181,7 +190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== req.session.userId) {
+      if (account.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -218,7 +227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the source account belongs to the current user
-      if (sourceAccount.userId !== req.session.userId) {
+      if (sourceAccount.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -271,7 +280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bill Routes
   app.get("/api/bills", requireAuth, async (req, res) => {
     try {
-      const bills = await storage.getUserBills(req.session.userId as number);
+      const bills = await storage.getUserBills((req.session as any).userId as number);
       res.json(bills);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching bills" });
@@ -304,7 +313,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== req.session.userId) {
+      if (account.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -315,7 +324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the bill belongs to the current user
-      if (bill.userId !== req.session.userId) {
+      if (bill.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -362,7 +371,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // External Bank Account Routes
   app.get("/api/external-bank-accounts", requireAuth, async (req, res) => {
     try {
-      const accounts = await storage.getUserExternalBankAccounts(req.session.userId as number);
+      const accounts = await storage.getUserExternalBankAccounts((req.session as any).userId as number);
       res.json(accounts);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching external bank accounts" });
@@ -379,7 +388,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== req.session.userId) {
+      if (account.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -403,7 +412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Add the current user's ID to the data
       const accountData = {
         ...validatedData.data,
-        userId: req.session.userId as number,
+        userId: (req.session as any).userId as number,
       };
       
       const account = await storage.createExternalBankAccount(accountData);
@@ -423,7 +432,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== req.session.userId) {
+      if (account.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -453,7 +462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== req.session.userId) {
+      if (account.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -467,7 +476,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // International Transfer Routes
   app.get("/api/international-transfers", requireAuth, async (req, res) => {
     try {
-      const transfers = await storage.getUserInternationalTransfers(req.session.userId as number);
+      const transfers = await storage.getUserInternationalTransfers((req.session as any).userId as number);
       res.json(transfers);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching international transfers" });
@@ -484,7 +493,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== req.session.userId) {
+      if (account.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -520,7 +529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the source account belongs to the current user
-      if (sourceAccount.userId !== req.session.userId) {
+      if (sourceAccount.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -531,7 +540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the external account belongs to the current user
-      if (externalAccount.userId !== req.session.userId) {
+      if (externalAccount.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -634,7 +643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the source account belongs to the current user
-      if (sourceAccount.userId !== req.session.userId) {
+      if (sourceAccount.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -726,7 +735,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== req.session.userId) {
+      if (account.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -760,7 +769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== req.session.userId) {
+      if (account.userId !== (req.session as any).userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -788,6 +797,674 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "An error occurred while generating PDF statement",
         error: error instanceof Error ? error.message : "Unknown error"
       });
+    }
+  });
+
+  // Loan Routes
+  app.get("/api/loans", requireAuth, async (req, res) => {
+    try {
+      const loans = await storage.getAllLoans();
+      res.json(loans);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching loans" });
+    }
+  });
+
+  app.get("/api/loans/:id", requireAuth, async (req, res) => {
+    try {
+      const loanId = parseInt(req.params.id);
+      const loan = await storage.getLoan(loanId);
+      
+      if (!loan) {
+        return res.status(404).json({ message: "Loan not found" });
+      }
+      
+      res.json(loan);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching loan" });
+    }
+  });
+
+  // Loan Application Routes
+  app.get("/api/loan-applications", requireAuth, async (req, res) => {
+    try {
+      const applications = await storage.getUserLoanApplications((req.session as any).userId as number);
+      res.json(applications);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching loan applications" });
+    }
+  });
+
+  app.post("/api/loan-applications", requireAuth, async (req, res) => {
+    try {
+      const validatedData = loanApplicationRequestSchema.safeParse(req.body);
+      
+      if (!validatedData.success) {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: validatedData.error.errors
+        });
+      }
+      
+      const { loanId, accountId, requestedAmount, term, purposeOfLoan, monthlyIncome, employmentStatus, employerName, employmentDuration, creditScore, existingDebt } = validatedData.data;
+      
+      // Verify loan exists
+      const loan = await storage.getLoan(loanId);
+      if (!loan) {
+        return res.status(404).json({ message: "Loan type not found" });
+      }
+      
+      // Verify account exists and belongs to user
+      if (accountId) {
+        const account = await storage.getAccount(accountId);
+        if (!account) {
+          return res.status(404).json({ message: "Account not found" });
+        }
+        
+        if (account.userId !== (req.session as any).userId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+      
+      // Create loan application
+      const loanApplication = await storage.createLoanApplication({
+        userId: (req.session as any).userId as number,
+        loanId,
+        accountId,
+        requestedAmount,
+        term,
+        purposeOfLoan,
+        monthlyIncome,
+        employmentStatus,
+        employerName: employerName || "",
+        employmentDuration: employmentDuration || 0,
+        creditScore: creditScore || 0,
+        existingDebt: existingDebt || ""
+      });
+      
+      res.status(201).json(loanApplication);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "An error occurred while creating loan application" });
+    }
+  });
+
+  app.get("/api/loan-applications/:id", requireAuth, async (req, res) => {
+    try {
+      const applicationId = parseInt(req.params.id);
+      const application = await storage.getLoanApplication(applicationId);
+      
+      if (!application) {
+        return res.status(404).json({ message: "Loan application not found" });
+      }
+      
+      // Check if the application belongs to the current user
+      if (application.userId !== (req.session as any).userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      res.json(application);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching loan application" });
+    }
+  });
+
+  // Admin routes for loan applications
+  app.get("/api/admin/loan-applications/pending", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser((req.session as any).userId as number);
+      
+      if (!user || user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const applications = await storage.getPendingLoanApplications();
+      res.json(applications);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching pending loan applications" });
+    }
+  });
+
+  app.post("/api/admin/loan-applications/:id/approve", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser((req.session as any).userId as number);
+      
+      if (!user || user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const applicationId = parseInt(req.params.id);
+      const validatedData = approveLoanSchema.safeParse(req.body);
+      
+      if (!validatedData.success) {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: validatedData.error.errors
+        });
+      }
+      
+      const { approvedAmount, approvedTermMonths, approvedInterestRate } = validatedData.data;
+      
+      const application = await storage.approveLoanApplication(
+        applicationId,
+        user.id,
+        parseFloat(approvedAmount),
+        approvedTermMonths,
+        parseFloat(approvedInterestRate)
+      );
+      
+      if (!application) {
+        return res.status(404).json({ message: "Loan application not found" });
+      }
+      
+      res.json(application);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while approving loan application" });
+    }
+  });
+
+  app.post("/api/admin/loan-applications/:id/reject", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser((req.session as any).userId as number);
+      
+      if (!user || user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const applicationId = parseInt(req.params.id);
+      const validatedData = rejectLoanSchema.safeParse(req.body);
+      
+      if (!validatedData.success) {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: validatedData.error.errors
+        });
+      }
+      
+      const { rejectionReason } = validatedData.data;
+      
+      const application = await storage.rejectLoanApplication(
+        applicationId,
+        user.id,
+        rejectionReason
+      );
+      
+      if (!application) {
+        return res.status(404).json({ message: "Loan application not found" });
+      }
+      
+      res.json(application);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while rejecting loan application" });
+    }
+  });
+
+  // Cryptocurrency Routes
+  app.get("/api/cryptocurrencies", requireAuth, async (req, res) => {
+    try {
+      const cryptocurrencies = await storage.getAllCryptocurrencies();
+      res.json(cryptocurrencies);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching cryptocurrencies" });
+    }
+  });
+
+  app.get("/api/crypto-accounts", requireAuth, async (req, res) => {
+    try {
+      const accounts = await storage.getUserCryptoAccounts((req.session as any).userId as number);
+      res.json(accounts);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching crypto accounts" });
+    }
+  });
+
+  // Crypto Purchase
+  app.post("/api/crypto/purchase", requireAuth, async (req, res) => {
+    try {
+      const validatedData = cryptoPurchaseSchema.safeParse(req.body);
+      
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      const { sourceAccountId, cryptoSymbol, amount } = validatedData.data;
+      const purchaseAmount = parseFloat(amount);
+      
+      if (isNaN(purchaseAmount) || purchaseAmount <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+      
+      // Get source account
+      const sourceAccount = await storage.getAccount(sourceAccountId);
+      if (!sourceAccount) {
+        return res.status(404).json({ message: "Source account not found" });
+      }
+      
+      // Check if the source account belongs to the current user
+      if (sourceAccount.userId !== (req.session as any).userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Get the cryptocurrency
+      const crypto = await storage.getCryptocurrencyBySymbol(cryptoSymbol);
+      if (!crypto) {
+        return res.status(404).json({ message: "Cryptocurrency not found" });
+      }
+      
+      // Check if user has enough balance
+      if (parseFloat(sourceAccount.balance) < purchaseAmount) {
+        return res.status(400).json({ message: "Insufficient funds" });
+      }
+      
+      // Calculate crypto amount based on exchange rate
+      const cryptoRate = parseFloat(crypto.usdRate);
+      const cryptoAmount = (purchaseAmount / cryptoRate).toFixed(8);
+      
+      // Check if user already has a crypto account for this currency
+      let cryptoAccount = (await storage.getUserCryptoAccounts((req.session as any).userId as number))
+        .find(account => account.currency === cryptoSymbol);
+      
+      // If not, create one
+      if (!cryptoAccount) {
+        cryptoAccount = await storage.createCryptoAccount({
+          userId: (req.session as any).userId as number,
+          accountName: `${cryptoSymbol} Account`,
+          accountNumber: `CRYPTO-${nanoid(8).toUpperCase()}`,
+          accountType: "crypto",
+          balance: "0",
+          currency: cryptoSymbol,
+          isCrypto: true
+        });
+      }
+      
+      // Generate reference
+      const reference = `CRYPTO-${nanoid(8).toUpperCase()}`;
+      
+      // Create withdrawal transaction from source account
+      const withdrawalTx = await storage.createTransaction({
+        accountId: sourceAccount.id,
+        amount: purchaseAmount.toString(),
+        type: "crypto_purchase",
+        description: `Purchase of ${cryptoAmount} ${cryptoSymbol}`,
+        reference,
+        status: "completed",
+        receiverAccount: cryptoAccount.accountNumber,
+        currency: sourceAccount.currency,
+        targetCurrency: cryptoSymbol,
+        exchangeRate: cryptoRate.toString()
+      });
+      
+      // Create deposit transaction to crypto account
+      const depositTx = await storage.createTransaction({
+        accountId: cryptoAccount.id,
+        amount: cryptoAmount,
+        type: "crypto_purchase",
+        description: `Purchased with ${purchaseAmount} ${sourceAccount.currency}`,
+        reference,
+        status: "completed",
+        senderAccount: sourceAccount.accountNumber,
+        currency: cryptoSymbol,
+        targetCurrency: sourceAccount.currency,
+        exchangeRate: (1 / cryptoRate).toString()
+      });
+      
+      // Update account balances
+      await storage.updateAccountBalance(sourceAccount.id, -purchaseAmount);
+      await storage.updateAccountBalance(cryptoAccount.id, parseFloat(cryptoAmount));
+      
+      res.status(201).json({ 
+        message: "Cryptocurrency purchase completed successfully", 
+        reference,
+        cryptoAmount,
+        usdAmount: purchaseAmount,
+        cryptoAccount
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "An error occurred during cryptocurrency purchase" });
+    }
+  });
+
+  // Crypto Exchange
+  app.post("/api/crypto/exchange", requireAuth, async (req, res) => {
+    try {
+      const validatedData = cryptoExchangeSchema.safeParse(req.body);
+      
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      const { fromAccountId, toSymbol, amount } = validatedData.data;
+      const exchangeAmount = parseFloat(amount);
+      
+      if (isNaN(exchangeAmount) || exchangeAmount <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+      
+      // Get source account
+      const sourceAccount = await storage.getAccount(fromAccountId);
+      if (!sourceAccount || !sourceAccount.isCrypto) {
+        return res.status(404).json({ message: "Source crypto account not found" });
+      }
+      
+      // Check if the source account belongs to the current user
+      if (sourceAccount.userId !== (req.session as any).userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Check if source has enough balance
+      if (parseFloat(sourceAccount.balance) < exchangeAmount) {
+        return res.status(400).json({ message: "Insufficient crypto funds" });
+      }
+      
+      // Get source and target crypto details
+      const sourceCrypto = await storage.getCryptocurrencyBySymbol(sourceAccount.currency);
+      const targetCrypto = await storage.getCryptocurrencyBySymbol(toSymbol);
+      
+      if (!sourceCrypto || !targetCrypto) {
+        return res.status(404).json({ message: "Cryptocurrency not found" });
+      }
+      
+      // Calculate exchange rates and amounts
+      const sourceUsdValue = exchangeAmount * parseFloat(sourceCrypto.usdRate);
+      const targetAmount = (sourceUsdValue / parseFloat(targetCrypto.usdRate)).toFixed(8);
+      
+      // Check if user already has a target crypto account
+      let targetAccount = (await storage.getUserCryptoAccounts((req.session as any).userId as number))
+        .find(account => account.currency === toSymbol);
+      
+      // If not, create one
+      if (!targetAccount) {
+        targetAccount = await storage.createCryptoAccount({
+          userId: (req.session as any).userId as number,
+          accountName: `${toSymbol} Account`,
+          accountNumber: `CRYPTO-${nanoid(8).toUpperCase()}`,
+          accountType: "crypto",
+          balance: "0",
+          currency: toSymbol,
+          isCrypto: true
+        });
+      }
+      
+      // Generate reference
+      const reference = `CRYPTO-EX-${nanoid(8).toUpperCase()}`;
+      
+      // Create withdrawal transaction from source account
+      const withdrawalTx = await storage.createTransaction({
+        accountId: sourceAccount.id,
+        amount: exchangeAmount.toString(),
+        type: "crypto_exchange",
+        description: `Exchange to ${targetAmount} ${toSymbol}`,
+        reference,
+        status: "completed",
+        receiverAccount: targetAccount.accountNumber,
+        currency: sourceAccount.currency,
+        targetCurrency: toSymbol,
+        exchangeRate: (parseFloat(targetCrypto.usdRate) / parseFloat(sourceCrypto.usdRate)).toString()
+      });
+      
+      // Create deposit transaction to target account
+      const depositTx = await storage.createTransaction({
+        accountId: targetAccount.id,
+        amount: targetAmount,
+        type: "crypto_exchange",
+        description: `Exchanged from ${exchangeAmount} ${sourceAccount.currency}`,
+        reference,
+        status: "completed",
+        senderAccount: sourceAccount.accountNumber,
+        currency: toSymbol,
+        targetCurrency: sourceAccount.currency,
+        exchangeRate: (parseFloat(sourceCrypto.usdRate) / parseFloat(targetCrypto.usdRate)).toString()
+      });
+      
+      // Update account balances
+      await storage.updateAccountBalance(sourceAccount.id, -exchangeAmount);
+      await storage.updateAccountBalance(targetAccount.id, parseFloat(targetAmount));
+      
+      res.status(201).json({ 
+        message: "Cryptocurrency exchange completed successfully", 
+        reference,
+        sourceAmount: exchangeAmount,
+        sourceCurrency: sourceAccount.currency,
+        targetAmount,
+        targetCurrency: toSymbol,
+        usdValueExchanged: sourceUsdValue
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "An error occurred during cryptocurrency exchange" });
+    }
+  });
+
+  // Crypto Transfer Request (External)
+  app.post("/api/crypto/transfer-requests", requireAuth, async (req, res) => {
+    try {
+      const validatedData = insertCryptoTransferRequestSchema.safeParse(req.body);
+      
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      const { fromAccountId, amount, externalAddress } = validatedData.data;
+      const transferAmount = parseFloat(amount);
+      
+      if (isNaN(transferAmount) || transferAmount <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+      
+      // Get source account
+      const sourceAccount = await storage.getAccount(fromAccountId);
+      if (!sourceAccount || !sourceAccount.isCrypto) {
+        return res.status(404).json({ message: "Source crypto account not found" });
+      }
+      
+      // Check if the source account belongs to the current user
+      if (sourceAccount.userId !== (req.session as any).userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Check if source has enough balance
+      if (parseFloat(sourceAccount.balance) < transferAmount) {
+        return res.status(400).json({ message: "Insufficient crypto funds" });
+      }
+      
+      // Get crypto details for USD conversion
+      const crypto = await storage.getCryptocurrencyBySymbol(sourceAccount.currency);
+      if (!crypto) {
+        return res.status(404).json({ message: "Cryptocurrency not found" });
+      }
+      
+      // Calculate USD value
+      const usdValue = (transferAmount * parseFloat(crypto.usdRate)).toFixed(2);
+      
+      // Determine fees (0.1% for external transfers)
+      const feePercentage = 0.001;
+      const feeAmount = (transferAmount * feePercentage).toFixed(8);
+      const totalAmount = (transferAmount - parseFloat(feeAmount)).toFixed(8);
+      
+      // Create transfer request
+      const transferRequest = await storage.createCryptoTransferRequest({
+        type: "external_transfer",
+        userId: (req.session as any).userId as number,
+        amount: transferAmount.toString(),
+        description: `External transfer to ${externalAddress}`,
+        targetCurrency: sourceAccount.currency,
+        sourceCurrency: sourceAccount.currency,
+        fromAccountId,
+        totalAmount,
+        fees: feeAmount,
+        totalInUSD: usdValue,
+        exchangeRate: crypto.usdRate,
+        externalAddress
+      });
+      
+      res.status(201).json({ 
+        message: "Cryptocurrency transfer request submitted for approval", 
+        transferRequest
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "An error occurred during cryptocurrency transfer request" });
+    }
+  });
+
+  // Get Crypto Transfer Requests
+  app.get("/api/crypto/transfer-requests", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId as number;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      let transferRequests;
+      if (user.role === "admin") {
+        // Admin can see all pending requests
+        transferRequests = await storage.getPendingCryptoTransferRequests();
+      } else {
+        // Regular users can only see their own requests
+        transferRequests = await storage.getUserCryptoTransferRequests(userId);
+      }
+      
+      res.json(transferRequests);
+    } catch (error) {
+      res.status(500).json({ message: "An error occurred while fetching crypto transfer requests" });
+    }
+  });
+
+  // Approve Crypto Transfer Request (Admin only)
+  app.post("/api/crypto/transfer-requests/:id/approve", requireAuth, async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const userId = (req.session as any).userId as number;
+      
+      // Check if user is admin
+      const user = await storage.getUser(userId);
+      if (!user || user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied. Admin rights required." });
+      }
+      
+      // Validate request data
+      const validatedData = approveCryptoTransferSchema.safeParse(req.body);
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      // Get the transfer request
+      const transferRequest = await storage.getCryptoTransferRequest(requestId);
+      if (!transferRequest) {
+        return res.status(404).json({ message: "Transfer request not found" });
+      }
+      
+      // Check if request is already processed
+      if (transferRequest.status !== "pending") {
+        return res.status(400).json({ 
+          message: `Cannot approve transfer request with status: ${transferRequest.status}` 
+        });
+      }
+      
+      // Get source account
+      const sourceAccount = await storage.getAccount(transferRequest.fromAccountId);
+      if (!sourceAccount) {
+        return res.status(404).json({ message: "Source account not found" });
+      }
+      
+      // Check if there is enough balance
+      const transferAmount = parseFloat(transferRequest.amount);
+      if (parseFloat(sourceAccount.balance) < transferAmount) {
+        return res.status(400).json({ message: "Insufficient funds in source account" });
+      }
+      
+      // Approve the transfer request
+      const approvedRequest = await storage.approveCryptoTransferRequest(requestId, userId);
+      
+      // Create transaction
+      const transaction = await storage.createTransaction({
+        accountId: transferRequest.fromAccountId,
+        amount: transferAmount.toString(),
+        type: "crypto_withdrawal",
+        description: transferRequest.description,
+        reference: `CRYPTO-TX-${requestId}`,
+        status: "completed",
+        receiverAccount: transferRequest.externalAddress || "External Wallet",
+        currency: sourceAccount.currency,
+        targetCurrency: transferRequest.targetCurrency,
+        exchangeRate: transferRequest.exchangeRate || null,
+        isApproved: true,
+        approvedById: userId,
+        approvedAt: new Date()
+      });
+      
+      // Update account balance
+      await storage.updateAccountBalance(sourceAccount.id, -transferAmount);
+      
+      // Complete the transfer request
+      const completedRequest = await storage.completeCryptoTransferRequest(requestId);
+      
+      res.status(200).json({ 
+        message: "Cryptocurrency transfer approved and completed", 
+        transferRequest: completedRequest
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "An error occurred during crypto transfer approval" });
+    }
+  });
+
+  // Reject Crypto Transfer Request (Admin only)
+  app.post("/api/crypto/transfer-requests/:id/reject", requireAuth, async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const userId = (req.session as any).userId as number;
+      
+      // Check if user is admin
+      const user = await storage.getUser(userId);
+      if (!user || user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied. Admin rights required." });
+      }
+      
+      // Get rejection reason
+      const { rejectionReason } = req.body;
+      if (!rejectionReason) {
+        return res.status(400).json({ message: "Rejection reason is required" });
+      }
+      
+      // Get the transfer request
+      const transferRequest = await storage.getCryptoTransferRequest(requestId);
+      if (!transferRequest) {
+        return res.status(404).json({ message: "Transfer request not found" });
+      }
+      
+      // Check if request is already processed
+      if (transferRequest.status !== "pending") {
+        return res.status(400).json({ 
+          message: `Cannot reject transfer request with status: ${transferRequest.status}` 
+        });
+      }
+      
+      // Reject the transfer request
+      const rejectedRequest = await storage.rejectCryptoTransferRequest(requestId, userId, rejectionReason);
+      
+      res.status(200).json({ 
+        message: "Cryptocurrency transfer request rejected", 
+        transferRequest: rejectedRequest
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "An error occurred during crypto transfer rejection" });
     }
   });
 
