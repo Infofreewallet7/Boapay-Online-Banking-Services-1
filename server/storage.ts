@@ -16,7 +16,10 @@ import {
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 
+import session from "express-session";
+
 export interface IStorage {
+  sessionStore: session.Store;
   // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -112,7 +115,10 @@ export interface IStorage {
   createCryptoAccount(account: InsertAccount): Promise<Account>;
 }
 
+import MemoryStore from "memorystore";
+
 export class MemStorage implements IStorage {
+  sessionStore: session.Store;
   private users: Map<number, User>;
   private accounts: Map<number, Account>;
   private transactions: Map<number, Transaction>;
@@ -140,6 +146,11 @@ export class MemStorage implements IStorage {
   currentCryptoTransferRequestId: number;
 
   constructor() {
+    // Create memory store for sessions
+    const MemStore = MemoryStore(session);
+    this.sessionStore = new MemStore({
+      checkPeriod: 86400000, // prune expired entries every 24h
+    });
     this.users = new Map();
     this.accounts = new Map();
     this.transactions = new Map();

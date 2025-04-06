@@ -103,7 +103,7 @@ export async function generateStatementData({
 /**
  * Generate a PDF account statement
  */
-export function generatePdfStatement(statementData: StatementData): any {
+export function generatePdfStatement(statementData: StatementData) {
   const doc = new PDFDocument({ margin: 50 });
 
   // Helper function to format dates
