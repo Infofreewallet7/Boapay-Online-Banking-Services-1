@@ -1,7 +1,15 @@
 import OpenAI from "openai";
 import { CategorySuggestion } from "@shared/schema";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Create a fallback implementation when no API key is provided
+let openai: OpenAI | null = null;
+try {
+  if (process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+} catch (error) {
+  console.warn("OpenAI client initialization failed. Running without AI features.");
+}
 
 export async function suggestTransactionCategory(data: CategorySuggestion): Promise<{
   category: string;
@@ -10,6 +18,12 @@ export async function suggestTransactionCategory(data: CategorySuggestion): Prom
   confidence: number;
 }> {
   try {
+    // Check if OpenAI client is available
+    if (!openai) {
+      console.warn("OpenAI client not initialized. Using default categorization.");
+      throw new Error("OpenAI client not available");
+    }
+
     // Format prompt with transaction data
     const prompt = `
       Please analyze this banking transaction and categorize it:
@@ -29,7 +43,7 @@ export async function suggestTransactionCategory(data: CategorySuggestion): Prom
 
     // Call the OpenAI API
     // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-    const response = await openai.chat.completions.create({
+    const response = await openai!.chat.completions.create({
       model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" }
@@ -70,6 +84,12 @@ export async function getSimilarCategorizedTransactions(description: string, lim
   }>;
 }> {
   try {
+    // Check if OpenAI client is available
+    if (!openai) {
+      console.warn("OpenAI client not initialized. Using default similar transactions.");
+      throw new Error("OpenAI client not available");
+    }
+
     const prompt = `
       I have a banking transaction with description: "${description}"
       
@@ -84,7 +104,7 @@ export async function getSimilarCategorizedTransactions(description: string, lim
     `;
 
     // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-    const response = await openai.chat.completions.create({
+    const response = await openai!.chat.completions.create({
       model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" }
