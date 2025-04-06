@@ -1,44 +1,29 @@
-import { useQuery, UseQueryOptions } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import AccountSummary from "@/components/Dashboard/AccountSummary";
 import RecentTransactions from "@/components/Dashboard/RecentTransactions";
 import QuickActions from "@/components/Dashboard/QuickActions";
 import WebSocketNotifications from "@/components/WebSocketNotifications";
+import NotificationSender from "@/components/NotificationSender";
 import { Account, Transaction, User } from "@shared/schema";
 
 export default function Dashboard() {
   const { toast } = useToast();
   
   const { isLoading: isLoadingUser, data: user = {} as User } = useQuery<User>({
-    queryKey: ["/api/user"],
+    queryKey: ["/api/auth/session"],
   });
   
-  const accountsOptions: UseQueryOptions<Account[]> = {
+  const { isLoading: isLoadingAccounts, data: accounts = [] } = useQuery<Account[]>({
     queryKey: ["/api/accounts"],
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to load accounts. Please try again later.",
-        variant: "destructive",
-      });
-    }
-  };
+    gcTime: 5 * 60 * 1000, // 5 minutes cache
+  });
   
-  const { isLoading: isLoadingAccounts, data: accounts = [] } = useQuery<Account[]>(accountsOptions);
-  
-  const transactionsOptions: UseQueryOptions<Transaction[]> = {
+  const { isLoading: isLoadingTransactions, data: transactions = [] } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions"],
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to load transactions. Please try again later.",
-        variant: "destructive",
-      });
-    }
-  };
-  
-  const { isLoading: isLoadingTransactions, data: transactions = [] } = useQuery<Transaction[]>(transactionsOptions);
+    gcTime: 5 * 60 * 1000, // 5 minutes cache
+  });
   
   const isLoading = isLoadingUser || isLoadingAccounts || isLoadingTransactions;
   
@@ -85,6 +70,9 @@ export default function Dashboard() {
         
         <div>
           <QuickActions accounts={accounts} />
+          <div className="mt-6">
+            <NotificationSender />
+          </div>
         </div>
       </div>
     </div>

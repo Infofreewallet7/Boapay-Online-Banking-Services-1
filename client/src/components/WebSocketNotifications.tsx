@@ -1,151 +1,157 @@
 import { useEffect, useState } from 'react';
-import { websocket } from '@/lib/websocket';
 import { useToast } from '@/hooks/use-toast';
-import { Bell, BellOff } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useWebSocket } from '@/lib/websocket';
+import { Bell, BellRing } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
+
+interface Notification {
+  id: string;
+  message: string;
+  timestamp: Date;
+  read: boolean;
+}
 
 export default function WebSocketNotifications() {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { toast } = useToast();
-  const [connected, setConnected] = useState(false);
-  const [notifications, setNotifications] = useState<{ message: string; timestamp: Date }[]>([]);
-  const [showNotifications, setShowNotifications] = useState(false);
-
+  const socket = useWebSocket();
+  
   useEffect(() => {
-    // Handle connection status
-    const handleConnect = () => {
-      setConnected(true);
-      toast({
-        title: 'Connected',
-        description: 'Real-time notifications enabled',
-      });
-    };
-
-    const handleDisconnect = () => {
-      setConnected(false);
-    };
-
-    // Handle incoming messages
-    const handleInfoMessage = (data: any) => {
-      if (data.message) {
-        setNotifications(prev => [
-          { message: data.message, timestamp: new Date() },
-          ...prev.slice(0, 9) // Keep only the last 10 notifications
-        ]);
+    if (!socket) return;
+    
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
         
-        toast({
-          title: 'New Notification',
-          description: data.message,
-        });
+        if (data.type === 'notification') {
+          const newNotification = {
+            id: crypto.randomUUID(),
+            message: data.message,
+            timestamp: new Date(),
+            read: false,
+          };
+          
+          setNotifications(prev => [newNotification, ...prev].slice(0, 10));
+          setUnreadCount(prev => prev + 1);
+          
+          toast({
+            title: 'New Notification',
+            description: data.message,
+          });
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
       }
     };
-
-    const handleEchoMessage = (data: any) => {
-      console.log('Echo message received:', data);
-    };
-
-    // Register handlers
-    websocket.onConnect(handleConnect);
-    websocket.onDisconnect(handleDisconnect);
-    websocket.on('info', handleInfoMessage);
-    websocket.on('echo', handleEchoMessage);
-
-    // If not already connected, try to connect
-    if (!connected) {
-      websocket.connect();
-    }
-
-    // Clean up handlers when component unmounts
+    
+    socket.addEventListener('message', handleMessage);
+    
     return () => {
-      websocket.removeConnectHandler(handleConnect);
-      websocket.removeDisconnectHandler(handleDisconnect);
-      websocket.off('info', handleInfoMessage);
-      websocket.off('echo', handleEchoMessage);
+      socket.removeEventListener('message', handleMessage);
     };
-  }, [toast]);
-
-  // Test websocket by sending a ping message
-  const sendPing = () => {
-    if (connected) {
-      websocket.send('ping', { time: new Date().toISOString() });
-    } else {
-      toast({
-        title: 'Not Connected',
-        description: 'Waiting for connection to server',
-        variant: 'destructive',
-      });
-    }
+  }, [socket, toast]);
+  
+  const markAllAsRead = () => {
+    setNotifications(prev => prev.map(notification => ({ ...notification, read: true })));
+    setUnreadCount(0);
   };
-
+  
+  const markAsRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(notification => 
+        notification.id === id 
+          ? { ...notification, read: true } 
+          : notification
+      )
+    );
+    setUnreadCount(prev => Math.max(0, prev - 1));
+  };
+  
   return (
-    <div className="relative">
-      <button
-        onClick={() => setShowNotifications(!showNotifications)}
-        className={cn(
-          "p-2 rounded-full transition-colors",
-          connected ? "text-green-500 hover:bg-green-100" : "text-gray-400 hover:bg-gray-100"
-        )}
-        aria-label={connected ? "Show notifications" : "Notifications disconnected"}
-      >
-        {connected ? (
-          <Bell className="h-5 w-5" />
-        ) : (
-          <BellOff className="h-5 w-5" />
-        )}
-        
-        {notifications.length > 0 && (
-          <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500 transform translate-x-1/2 -translate-y-1/2"></span>
-        )}
-      </button>
-
-      {showNotifications && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg z-10 border border-gray-200">
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex justify-between items-center">
-              <h3 className="text-sm font-semibold">Notifications</h3>
-              <span className={cn(
-                "text-xs px-2 py-1 rounded-full",
-                connected ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-              )}>
-                {connected ? 'Connected' : 'Disconnected'}
-              </span>
-            </div>
-          </div>
-          
-          <div className="max-h-80 overflow-y-auto">
-            {notifications.length === 0 ? (
-              <div className="py-6 text-center text-gray-500 text-sm">
-                <p>No notifications yet</p>
-                <button 
-                  onClick={sendPing}
-                  className="mt-2 px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100"
-                >
-                  Test Connection
-                </button>
-              </div>
-            ) : (
-              <ul className="divide-y divide-gray-100">
-                {notifications.map((notification, index) => (
-                  <li key={index} className="px-4 py-3 hover:bg-gray-50">
-                    <div className="text-sm">{notification.message}</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {notification.timestamp.toLocaleTimeString()}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          
-          <div className="p-3 border-t border-gray-200 bg-gray-50 text-right">
-            <button 
-              className="text-xs text-blue-600 hover:text-blue-800"
-              onClick={() => setNotifications([])}
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon" className="relative">
+          {unreadCount > 0 ? (
+            <>
+              <BellRing className="h-5 w-5" />
+              <Badge 
+                className="absolute -top-2 -right-2 px-1.5 py-0.5 text-xs min-w-[1.25rem] min-h-[1.25rem] flex items-center justify-center"
+              >
+                {unreadCount}
+              </Badge>
+            </>
+          ) : (
+            <Bell className="h-5 w-5" />
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <DropdownMenuLabel className="flex justify-between items-center">
+          <span>Notifications</span>
+          {unreadCount > 0 && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-xs h-auto py-1"
+              onClick={markAllAsRead}
             >
-              Clear all
-            </button>
+              Mark all as read
+            </Button>
+          )}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        
+        {notifications.length === 0 ? (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p>No notifications yet</p>
           </div>
-        </div>
-      )}
-    </div>
+        ) : (
+          <>
+            {notifications.map(notification => (
+              <DropdownMenuItem 
+                key={notification.id} 
+                className="cursor-default p-0"
+                onSelect={(e) => e.preventDefault()}
+              >
+                <Card 
+                  className={`w-full p-3 my-1 ${notification.read ? '' : 'bg-primary/5 dark:bg-primary/10'}`}
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <p className="text-sm font-medium">{notification.message}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(notification.timestamp).toLocaleTimeString()}
+                      </p>
+                    </div>
+                    {!notification.read && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 px-2"
+                        onClick={() => markAsRead(notification.id)}
+                      >
+                        Mark read
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              </DropdownMenuItem>
+            ))}
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
