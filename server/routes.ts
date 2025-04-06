@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
+import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { 
   loginUserSchema, 
@@ -120,7 +121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     try {
-      const user = await storage.getUser(userId);
+      const user = await storage.getUser(userId as number);
       
       if (!user) {
         req.session.destroy(() => {});
@@ -427,9 +428,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Add the current user's ID to the data
+      const userId = req.session.userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       const accountData = {
         ...validatedData.data,
-        userId: req.session.userId,
+        userId,
       };
       
       const account = await storage.createExternalBankAccount(accountData);
@@ -892,8 +898,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Create loan application
+      const userId = req.session.userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       const loanApplication = await storage.createLoanApplication({
-        userId: req.session.userId,
+        userId,
         loanId,
         accountId,
         requestedAmount,
@@ -937,7 +948,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin routes for loan applications
   app.get("/api/admin/loan-applications/pending", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser(req.session.userId);
+      const userId = req.session.userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = await storage.getUser(userId as number);
       
       if (!user || user.role !== "admin") {
         return res.status(403).json({ message: "Access denied" });
@@ -952,7 +968,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/loan-applications/:id/approve", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser(req.session.userId);
+      const userId = req.session.userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = await storage.getUser(userId as number);
       
       if (!user || user.role !== "admin") {
         return res.status(403).json({ message: "Access denied" });
@@ -990,7 +1011,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/loan-applications/:id/reject", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser(req.session.userId);
+      const userId = req.session.userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = await storage.getUser(userId as number);
       
       if (!user || user.role !== "admin") {
         return res.status(403).json({ message: "Access denied" });
@@ -1320,10 +1346,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const feeAmount = (transferAmount * feePercentage).toFixed(8);
       const totalAmount = (transferAmount - parseFloat(feeAmount)).toFixed(8);
       
+      // Get userId and verify it exists
+      const userId = req.session.userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       // Create transfer request
       const transferRequest = await storage.createCryptoTransferRequest({
         type: "external_transfer",
-        userId: req.session.userId,
+        userId,
         amount: transferAmount.toString(),
         description: `External transfer to ${externalAddress}`,
         targetCurrency: sourceAccount.currency,
@@ -1350,7 +1382,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/crypto/transfer-requests", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
-      const user = await storage.getUser(userId);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = await storage.getUser(userId as number);
       
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -1376,9 +1412,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const requestId = parseInt(req.params.id);
       const userId = req.session.userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Check if user is admin
-      const user = await storage.getUser(userId);
+      const user = await storage.getUser(userId as number);
       if (!user || user.role !== "admin") {
         return res.status(403).json({ message: "Access denied. Admin rights required." });
       }
@@ -1458,9 +1497,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const requestId = parseInt(req.params.id);
       const userId = req.session.userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Check if user is admin
-      const user = await storage.getUser(userId);
+      const user = await storage.getUser(userId as number);
       if (!user || user.role !== "admin") {
         return res.status(403).json({ message: "Access denied. Admin rights required." });
       }
@@ -1498,5 +1540,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // Setup WebSocket server on a distinct path to avoid conflict with Vite's HMR
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  wss.on('connection', (ws) => {
+    console.log('WebSocket client connected');
+    
+    // Send a welcome message to the client
+    ws.send(JSON.stringify({ type: 'info', message: 'Connected to Boapay WebSocket server' }));
+    
+    // Handle messages from client
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        console.log('Received message:', data);
+        
+        // Echo the message back to the client for testing
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ 
+            type: 'echo', 
+            message: 'Echo from server', 
+            data 
+          }));
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    });
+    
+    // Handle disconnection
+    ws.on('close', () => {
+      console.log('WebSocket client disconnected');
+    });
+  });
+  
+  console.log('WebSocket server initialized on path: /ws');
+  
   return httpServer;
 }
