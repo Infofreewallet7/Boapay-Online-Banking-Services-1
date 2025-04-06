@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,15 +11,20 @@ import Payments from "@/pages/Payments";
 import Support from "@/pages/Support";
 import Settings from "@/pages/Settings";
 import AuthPage from "@/pages/auth-page";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
+import AppHeader from "./components/AppHeader";
+import Footer from "./components/Footer";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 
 function Router() {
+  const [location] = useLocation();
+  const isHomePage = location === "/";
+  
   return (
     <div className="flex flex-col min-h-screen">
-      <Header />
+      {/* Only show the app header on authenticated/internal pages */}
+      {!isHomePage && <AppHeader />}
+      
       <main className="flex-grow">
         <Switch>
           {/* Public routes */}
