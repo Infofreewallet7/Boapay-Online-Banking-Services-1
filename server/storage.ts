@@ -1447,4 +1447,634 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+import { db } from './db';
+import { and, eq, desc, like, sql, inArray } from 'drizzle-orm';
+import connectPgSimple from 'connect-pg-simple';
+import { pool } from './db';
+
+export class DbStorage implements IStorage {
+  sessionStore: session.Store;
+  
+  constructor() {
+    const PgSession = connectPgSimple(session);
+    this.sessionStore = new PgSession({
+      pool,
+      tableName: 'sessions'
+    });
+  }
+  
+  // User methods
+  async getUser(id: number): Promise<User | undefined> {
+    const results = await db.select().from(users).where(eq(users.id, id));
+    return results[0];
+  }
+  
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const results = await db.select().from(users).where(eq(users.username, username));
+    return results[0];
+  }
+  
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const results = await db.select().from(users).where(eq(users.email, email));
+    return results[0];
+  }
+  
+  async createUser(user: InsertUser): Promise<User> {
+    const results = await db.insert(users).values(user).returning();
+    return results[0];
+  }
+  
+  async verifyUser(id: number, verificationCode: string): Promise<User | undefined> {
+    const user = await this.getUser(id);
+    if (!user || user.verificationCode !== verificationCode) return undefined;
+    
+    const results = await db.update(users)
+      .set({ isVerified: true, verificationCode: null })
+      .where(eq(users.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  async setUserVerificationCode(id: number, code: string): Promise<User | undefined> {
+    const results = await db.update(users)
+      .set({ verificationCode: code })
+      .where(eq(users.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  async approveUser(id: number, approvedById: number): Promise<User | undefined> {
+    const results = await db.update(users)
+      .set({ isApproved: true })
+      .where(eq(users.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  async getAdmins(): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.role, 'admin'));
+  }
+  
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+  
+  async updateUserRole(id: number, role: string): Promise<User | undefined> {
+    const results = await db.update(users)
+      .set({ role })
+      .where(eq(users.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  // Account methods
+  async getAccount(id: number): Promise<Account | undefined> {
+    const results = await db.select().from(accounts).where(eq(accounts.id, id));
+    return results[0];
+  }
+  
+  async getAccountByNumber(accountNumber: string): Promise<Account | undefined> {
+    const results = await db.select().from(accounts).where(eq(accounts.accountNumber, accountNumber));
+    return results[0];
+  }
+  
+  async getUserAccounts(userId: number): Promise<Account[]> {
+    return await db.select().from(accounts).where(eq(accounts.userId, userId));
+  }
+  
+  async createAccount(account: InsertAccount): Promise<Account> {
+    const results = await db.insert(accounts).values(account).returning();
+    return results[0];
+  }
+  
+  async updateAccountBalance(id: number, amount: number): Promise<Account | undefined> {
+    const account = await this.getAccount(id);
+    if (!account) return undefined;
+    
+    const newBalance = parseFloat(account.balance.toString()) + amount;
+    
+    const results = await db.update(accounts)
+      .set({ balance: newBalance.toString() })
+      .where(eq(accounts.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  // Transaction methods
+  async getTransaction(id: number): Promise<Transaction | undefined> {
+    const results = await db.select().from(transactions).where(eq(transactions.id, id));
+    return results[0];
+  }
+  
+  async getAccountTransactions(accountId: number): Promise<Transaction[]> {
+    return await db.select()
+      .from(transactions)
+      .where(eq(transactions.accountId, accountId))
+      .orderBy(desc(transactions.createdAt));
+  }
+  
+  async getUserTransactions(userId: number): Promise<Transaction[]> {
+    const userAccounts = await this.getUserAccounts(userId);
+    const accountIds = userAccounts.map(account => account.id);
+    
+    if (accountIds.length === 0) return [];
+    
+    return await db.select()
+      .from(transactions)
+      .where(inArray(transactions.accountId, accountIds))
+      .orderBy(desc(transactions.createdAt));
+  }
+  
+  async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
+    const results = await db.insert(transactions).values(transaction).returning();
+    return results[0];
+  }
+  
+  // Bill methods
+  async getBill(id: number): Promise<Bill | undefined> {
+    const results = await db.select().from(bills).where(eq(bills.id, id));
+    return results[0];
+  }
+  
+  async getUserBills(userId: number): Promise<Bill[]> {
+    return await db.select()
+      .from(bills)
+      .where(eq(bills.userId, userId))
+      .orderBy(desc(bills.createdAt));
+  }
+  
+  async createBill(bill: InsertBill): Promise<Bill> {
+    const results = await db.insert(bills).values(bill).returning();
+    return results[0];
+  }
+  
+  async updateBillStatus(id: number, status: string): Promise<Bill | undefined> {
+    const results = await db.update(bills)
+      .set({ status })
+      .where(eq(bills.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  // Bill Payment methods
+  async getBillPayment(id: number): Promise<BillPaymentType | undefined> {
+    const results = await db.select().from(billPayments).where(eq(billPayments.id, id));
+    return results[0];
+  }
+  
+  async getBillPayments(billId: number): Promise<BillPaymentType[]> {
+    return await db.select()
+      .from(billPayments)
+      .where(eq(billPayments.billId, billId))
+      .orderBy(desc(billPayments.paymentDate));
+  }
+  
+  async createBillPayment(payment: InsertBillPayment): Promise<BillPaymentType> {
+    const results = await db.insert(billPayments).values(payment).returning();
+    return results[0];
+  }
+  
+  // External Bank Account methods
+  async getExternalBankAccount(id: number): Promise<ExternalBankAccount | undefined> {
+    const results = await db.select().from(externalBankAccounts).where(eq(externalBankAccounts.id, id));
+    return results[0];
+  }
+  
+  async getUserExternalBankAccounts(userId: number): Promise<ExternalBankAccount[]> {
+    return await db.select()
+      .from(externalBankAccounts)
+      .where(eq(externalBankAccounts.userId, userId))
+      .orderBy(desc(externalBankAccounts.createdAt));
+  }
+  
+  async createExternalBankAccount(account: InsertExternalBankAccount): Promise<ExternalBankAccount> {
+    const results = await db.insert(externalBankAccounts).values(account).returning();
+    return results[0];
+  }
+  
+  async updateExternalBankAccount(id: number, accountUpdate: Partial<InsertExternalBankAccount>): Promise<ExternalBankAccount | undefined> {
+    const results = await db.update(externalBankAccounts)
+      .set(accountUpdate)
+      .where(eq(externalBankAccounts.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  async deleteExternalBankAccount(id: number): Promise<boolean> {
+    const result = await db.delete(externalBankAccounts).where(eq(externalBankAccounts.id, id));
+    return !!result; // Just check if result exists
+  }
+  
+  // International Transfer methods
+  async getInternationalTransfer(id: number): Promise<InternationalTransferType | undefined> {
+    const results = await db.select().from(internationalTransfers).where(eq(internationalTransfers.id, id));
+    return results[0];
+  }
+  
+  async getUserInternationalTransfers(userId: number): Promise<InternationalTransferType[]> {
+    const userAccounts = await this.getUserAccounts(userId);
+    const accountIds = userAccounts.map(account => account.id);
+    
+    if (accountIds.length === 0) return [];
+    
+    return await db.select()
+      .from(internationalTransfers)
+      .where(inArray(internationalTransfers.sourceAccountId, accountIds))
+      .orderBy(desc(internationalTransfers.createdAt));
+  }
+  
+  async getAccountInternationalTransfers(accountId: number): Promise<InternationalTransferType[]> {
+    return await db.select()
+      .from(internationalTransfers)
+      .where(eq(internationalTransfers.sourceAccountId, accountId))
+      .orderBy(desc(internationalTransfers.createdAt));
+  }
+  
+  async createInternationalTransfer(transfer: InsertInternationalTransfer): Promise<InternationalTransferType> {
+    const results = await db.insert(internationalTransfers).values(transfer).returning();
+    return results[0];
+  }
+  
+  async updateInternationalTransferStatus(id: number, status: string, failureReason?: string): Promise<InternationalTransferType | undefined> {
+    const updateValues: any = { status };
+    
+    if (status === 'completed') {
+      updateValues.completedAt = new Date();
+    }
+    
+    if (failureReason) {
+      updateValues.failureReason = failureReason;
+    }
+    
+    const results = await db.update(internationalTransfers)
+      .set(updateValues)
+      .where(eq(internationalTransfers.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  async approveInternationalTransfer(id: number, approvedById: number): Promise<InternationalTransferType | undefined> {
+    const results = await db.update(internationalTransfers)
+      .set({ 
+        isApproved: true, 
+        approvedById, 
+        approvedAt: new Date(),
+        status: 'approved'
+      })
+      .where(eq(internationalTransfers.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  // Transfer Request methods
+  async getTransferRequest(id: number): Promise<TransferRequestType | undefined> {
+    const results = await db.select().from(transferRequests).where(eq(transferRequests.id, id));
+    return results[0];
+  }
+  
+  async getUserTransferRequests(userId: number): Promise<TransferRequestType[]> {
+    return await db.select()
+      .from(transferRequests)
+      .where(eq(transferRequests.userId, userId))
+      .orderBy(desc(transferRequests.createdAt));
+  }
+  
+  async getPendingTransferRequests(): Promise<TransferRequestType[]> {
+    return await db.select()
+      .from(transferRequests)
+      .where(eq(transferRequests.status, 'pending'))
+      .orderBy(desc(transferRequests.createdAt));
+  }
+  
+  async createTransferRequest(request: InsertTransferRequest): Promise<TransferRequestType> {
+    const results = await db.insert(transferRequests).values(request).returning();
+    return results[0];
+  }
+  
+  async approveTransferRequest(id: number, approvedById: number): Promise<TransferRequestType | undefined> {
+    const results = await db.update(transferRequests)
+      .set({ 
+        status: 'approved', 
+        approvedById, 
+        approvedAt: new Date() 
+      })
+      .where(eq(transferRequests.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  async rejectTransferRequest(id: number, approvedById: number, rejectionReason: string): Promise<TransferRequestType | undefined> {
+    const results = await db.update(transferRequests)
+      .set({ 
+        status: 'rejected', 
+        approvedById, 
+        approvedAt: new Date(),
+        rejectionReason
+      })
+      .where(eq(transferRequests.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  async completeTransferRequest(id: number): Promise<TransferRequestType | undefined> {
+    const results = await db.update(transferRequests)
+      .set({ 
+        status: 'completed', 
+        completedAt: new Date() 
+      })
+      .where(eq(transferRequests.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  // Loan methods
+  async getLoan(id: number): Promise<LoanType | undefined> {
+    const results = await db.select().from(loans).where(eq(loans.id, id));
+    return results[0];
+  }
+  
+  async getAllLoans(): Promise<LoanType[]> {
+    return await db.select().from(loans);
+  }
+  
+  async createLoan(loan: InsertLoan): Promise<LoanType> {
+    const results = await db.insert(loans).values(loan).returning();
+    return results[0];
+  }
+  
+  // Loan Application methods
+  async getLoanApplication(id: number): Promise<LoanApplicationType | undefined> {
+    const results = await db.select().from(loanApplications).where(eq(loanApplications.id, id));
+    return results[0];
+  }
+  
+  async getUserLoanApplications(userId: number): Promise<LoanApplicationType[]> {
+    return await db.select()
+      .from(loanApplications)
+      .where(eq(loanApplications.userId, userId))
+      .orderBy(desc(loanApplications.applicationDate));
+  }
+  
+  async getPendingLoanApplications(): Promise<LoanApplicationType[]> {
+    return await db.select()
+      .from(loanApplications)
+      .where(eq(loanApplications.status, 'pending'))
+      .orderBy(desc(loanApplications.applicationDate));
+  }
+  
+  async createLoanApplication(application: InsertLoanApplication): Promise<LoanApplicationType> {
+    const results = await db.insert(loanApplications).values(application).returning();
+    return results[0];
+  }
+  
+  async approveLoanApplication(
+    id: number, 
+    approvedById: number, 
+    approvedAmount: number, 
+    approvedTermMonths: number, 
+    approvedInterestRate: number
+  ): Promise<LoanApplicationType | undefined> {
+    const results = await db.update(loanApplications)
+      .set({ 
+        status: 'approved', 
+        approvedById, 
+        approvalDate: new Date(),
+        approvedAmount: approvedAmount.toString(),
+        approvedTermMonths,
+        approvedInterestRate: approvedInterestRate.toString()
+      })
+      .where(eq(loanApplications.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  async rejectLoanApplication(id: number, approvedById: number, rejectionReason: string): Promise<LoanApplicationType | undefined> {
+    const results = await db.update(loanApplications)
+      .set({ 
+        status: 'rejected', 
+        approvedById, 
+        approvalDate: new Date(),
+        rejectionReason
+      })
+      .where(eq(loanApplications.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  // Cryptocurrency methods
+  async getCryptocurrency(id: number): Promise<CryptocurrencyType | undefined> {
+    const results = await db.select().from(cryptocurrencies).where(eq(cryptocurrencies.id, id));
+    return results[0];
+  }
+  
+  async getCryptocurrencyByCode(code: string): Promise<CryptocurrencyType | undefined> {
+    const results = await db.select().from(cryptocurrencies).where(eq(cryptocurrencies.code, code));
+    return results[0];
+  }
+  
+  async getAllCryptocurrencies(): Promise<CryptocurrencyType[]> {
+    return await db.select().from(cryptocurrencies);
+  }
+  
+  async getAvailableCryptocurrencies(): Promise<CryptocurrencyType[]> {
+    return await db.select().from(cryptocurrencies).where(eq(cryptocurrencies.available, true));
+  }
+  
+  async createCryptocurrency(crypto: InsertCryptocurrency): Promise<CryptocurrencyType> {
+    const results = await db.insert(cryptocurrencies).values(crypto).returning();
+    return results[0];
+  }
+  
+  async updateCryptocurrencyRates(id: number, usdRate: string, eurRate: string): Promise<CryptocurrencyType | undefined> {
+    const results = await db.update(cryptocurrencies)
+      .set({ 
+        usdRate, 
+        eurRate, 
+        updatedAt: new Date() 
+      })
+      .where(eq(cryptocurrencies.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  // Crypto Transfer Request methods
+  async getCryptoTransferRequest(id: number): Promise<CryptoTransferRequestType | undefined> {
+    const results = await db.select().from(cryptoTransferRequests).where(eq(cryptoTransferRequests.id, id));
+    return results[0];
+  }
+  
+  async getUserCryptoTransferRequests(userId: number): Promise<CryptoTransferRequestType[]> {
+    return await db.select()
+      .from(cryptoTransferRequests)
+      .where(eq(cryptoTransferRequests.userId, userId))
+      .orderBy(desc(cryptoTransferRequests.createdAt));
+  }
+  
+  async getPendingCryptoTransferRequests(): Promise<CryptoTransferRequestType[]> {
+    return await db.select()
+      .from(cryptoTransferRequests)
+      .where(eq(cryptoTransferRequests.status, 'pending'))
+      .orderBy(desc(cryptoTransferRequests.createdAt));
+  }
+  
+  async createCryptoTransferRequest(request: InsertCryptoTransferRequest): Promise<CryptoTransferRequestType> {
+    const results = await db.insert(cryptoTransferRequests).values(request).returning();
+    return results[0];
+  }
+  
+  async approveCryptoTransferRequest(id: number, approvedById: number): Promise<CryptoTransferRequestType | undefined> {
+    const results = await db.update(cryptoTransferRequests)
+      .set({ 
+        status: 'approved', 
+        approvedById, 
+        approvedAt: new Date() 
+      })
+      .where(eq(cryptoTransferRequests.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  async rejectCryptoTransferRequest(id: number, approvedById: number, rejectionReason: string): Promise<CryptoTransferRequestType | undefined> {
+    const results = await db.update(cryptoTransferRequests)
+      .set({ 
+        status: 'rejected', 
+        approvedById, 
+        approvedAt: new Date(),
+        rejectionReason
+      })
+      .where(eq(cryptoTransferRequests.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  async completeCryptoTransferRequest(id: number): Promise<CryptoTransferRequestType | undefined> {
+    const results = await db.update(cryptoTransferRequests)
+      .set({ 
+        status: 'completed', 
+        completedAt: new Date() 
+      })
+      .where(eq(cryptoTransferRequests.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  // Crypto Account methods
+  async getUserCryptoAccounts(userId: number): Promise<Account[]> {
+    return await db.select()
+      .from(accounts)
+      .where(and(
+        eq(accounts.userId, userId),
+        eq(accounts.isCrypto, true)
+      ));
+  }
+  
+  async createCryptoAccount(account: InsertAccount): Promise<Account> {
+    const accountWithCrypto = {
+      ...account,
+      isCrypto: true
+    };
+    
+    const results = await db.insert(accounts).values(accountWithCrypto).returning();
+    return results[0];
+  }
+  
+  // Transaction Categorization methods
+  async updateTransactionCategory(id: number, category: string, subcategory?: string, tags?: string[], notes?: string): Promise<Transaction | undefined> {
+    const updateData: any = { category };
+    
+    if (subcategory) updateData.subcategory = subcategory;
+    if (tags) updateData.tags = tags;
+    if (notes) updateData.notes = notes;
+    
+    const results = await db.update(transactions)
+      .set(updateData)
+      .where(eq(transactions.id, id))
+      .returning();
+    
+    return results[0];
+  }
+  
+  async getTransactionCategories(): Promise<string[]> {
+    // Return a default set of categories
+    return [
+      "income",
+      "shopping",
+      "food",
+      "utilities",
+      "transportation",
+      "housing",
+      "entertainment",
+      "health",
+      "education",
+      "personal",
+      "travel",
+      "business",
+      "investments",
+      "transfers",
+      "uncategorized"
+    ];
+  }
+  
+  async getTransactionSubcategories(category: string): Promise<string[]> {
+    // Return subcategories based on the main category
+    const subcategories: Record<string, string[]> = {
+      "income": ["salary", "bonus", "interest", "dividends", "gifts", "refunds", "other"],
+      "shopping": ["clothing", "electronics", "groceries", "home", "online", "gifts", "other"],
+      "food": ["restaurants", "fast food", "coffee shops", "groceries", "delivery", "other"],
+      "utilities": ["electricity", "water", "gas", "internet", "phone", "cable", "streaming", "other"],
+      "transportation": ["public transit", "gas", "parking", "car payment", "rideshare", "maintenance", "other"],
+      "housing": ["rent", "mortgage", "insurance", "property tax", "repairs", "furniture", "other"],
+      "entertainment": ["movies", "games", "music", "events", "subscriptions", "hobbies", "other"],
+      "health": ["insurance", "doctor", "pharmacy", "fitness", "other"],
+      "education": ["tuition", "books", "courses", "student loans", "other"],
+      "personal": ["beauty", "self-care", "clothing", "other"],
+      "travel": ["flights", "hotels", "car rental", "activities", "food", "other"],
+      "business": ["office supplies", "marketing", "services", "software", "other"],
+      "investments": ["stocks", "bonds", "crypto", "retirement", "other"],
+      "transfers": ["internal", "external", "other"],
+      "uncategorized": ["other"]
+    };
+    
+    return subcategories[category] || ["other"];
+  }
+}
+
+// We need to create the sessions table if it doesn't exist
+const createSessionsTable = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "sessions" (
+        "sid" varchar NOT NULL COLLATE "default",
+        "sess" json NOT NULL,
+        "expire" timestamp(6) NOT NULL,
+        CONSTRAINT "sessions_pkey" PRIMARY KEY ("sid")
+      )
+    `);
+    console.log("Sessions table created or already exists");
+  } catch (error) {
+    console.error("Error creating sessions table:", error);
+  }
+};
+
+createSessionsTable();
+
+// Use DbStorage instead of MemStorage
+export const storage = new DbStorage();
