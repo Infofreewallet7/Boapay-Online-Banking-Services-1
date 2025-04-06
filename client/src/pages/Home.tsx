@@ -8,43 +8,55 @@ import {
   Lock, 
   Headset
 } from "lucide-react";
-import LoginForm from "@/components/LoginForm";
-import RegisterForm from "@/components/RegisterForm";
+import { Button } from "@/components/ui/button";
+import Header from "@/components/Header";
+import ServicesSection from "@/components/ServicesSection";
+import AuthForms from "@/components/AuthForms";
 
 export default function Home() {
-  const loginSectionRef = useRef<HTMLDivElement>(null);
-  const registerSectionRef = useRef<HTMLDivElement>(null);
+  const servicesRef = useRef<HTMLDivElement>(null);
+  const authSectionRef = useRef<HTMLDivElement>(null);
   
-  const scrollToLogin = () => {
-    loginSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToServices = () => {
+    servicesRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
   
-  const scrollToRegister = () => {
-    registerSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToAuth = () => {
+    authSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
   
   return (
     <>
+      <Header />
+      
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-r from-primary-900 to-primary py-16 sm:py-24 overflow-hidden">
+      <section className="relative bg-gradient-to-r from-primary-900 to-primary py-20 sm:py-28 overflow-hidden">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="lg:grid lg:grid-cols-2 lg:gap-8 items-center">
             <div className="mb-12 lg:mb-0">
-              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Welcome to Boapay Online Banking</h2>
-              <p className="text-lg text-blue-100 mb-8">Manage your finances securely and conveniently, anytime, anywhere.</p>
+              <h1 className="text-4xl sm:text-5xl font-bold text-white mb-6 leading-tight">
+                Banking Made Simple, Secure, and Smart
+              </h1>
+              <p className="text-xl text-blue-100 mb-8 max-w-xl">
+                Boapay offers modern banking solutions to help you manage your finances 
+                efficiently with our powerful online platform.
+              </p>
               <div className="flex flex-wrap gap-4">
-                <button 
-                  onClick={scrollToLogin}
-                  className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-primary bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition"
+                <Button 
+                  size="lg"
+                  onClick={scrollToAuth}
+                  className="bg-white text-primary hover:bg-gray-100"
                 >
-                  Login
-                </button>
-                <button 
-                  onClick={scrollToRegister}
-                  className="inline-flex items-center px-6 py-3 border border-white text-base font-medium rounded-md text-white bg-transparent hover:bg-white hover:bg-opacity-10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white transition"
+                  Get Started
+                </Button>
+                <Button 
+                  size="lg"
+                  variant="outline"
+                  onClick={scrollToServices}
+                  className="border-white text-white hover:bg-white/10"
                 >
-                  Open an Account
-                </button>
+                  Explore Services
+                </Button>
               </div>
             </div>
             <div className="relative lg:h-full flex justify-center">
@@ -84,12 +96,39 @@ export default function Home() {
         </div>
       </section>
 
+      {/* About Section - Explanation Paragraph */}
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-3xl font-bold text-gray-900 mb-6">
+              The Future of Banking is Here
+            </h2>
+            <p className="text-lg text-gray-700 mb-8 leading-relaxed">
+              Boapay is a comprehensive online banking platform designed to simplify your financial life. 
+              With powerful features like multi-currency accounts, instant domestic and international transfers, 
+              AI-powered transaction categorization, and cryptocurrency integration, we offer everything you 
+              need in a modern banking solution. Our platform combines cutting-edge security measures with 
+              an intuitive interface, making it both safe and easy to manage your finances from anywhere in the world.
+            </p>
+            <div className="flex justify-center">
+              <Button variant="outline" size="lg" onClick={scrollToServices}>
+                Learn More About Our Services
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Features Section */}
-      <section className="py-16 sm:py-24 bg-white">
+      <section className="py-16 sm:py-20 bg-gray-50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">Our Key Features</h2>
-            <div className="w-20 h-1 bg-primary mx-auto rounded-full"></div>
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+              Experience the advantages of our innovative banking platform designed to make 
+              managing your finances easier, faster, and more secure.
+            </p>
+            <div className="w-20 h-1 bg-primary mx-auto mt-6 rounded-full"></div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -106,7 +145,7 @@ export default function Home() {
                 <ArrowLeftRight className="h-8 w-8" />
               </div>
               <h3 className="text-lg font-semibold mb-2">Fund Transfers</h3>
-              <p className="text-gray-600">Easily send and receive money to other Boapay accounts and external banks.</p>
+              <p className="text-gray-600">Easily send and receive money to other accounts and external banks.</p>
             </div>
 
             <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-300 ease-in-out text-center">
@@ -128,27 +167,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Login Section */}
-      <section ref={loginSectionRef} id="login-section" className="py-16 sm:py-24 bg-gray-50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-md mx-auto">
-            <LoginForm />
-
-            <div className="mt-6 bg-blue-50 border-l-4 border-primary p-4 rounded">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <Lock className="h-5 w-5 text-primary" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-primary-900">
-                    For security reasons, please ensure you're on the official Boapay website before entering your login details.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Services Section */}
+      <div ref={servicesRef}>
+        <ServicesSection />
+      </div>
 
       {/* CTA Section */}
       <section className="py-16 sm:py-24 bg-primary-900 text-white">
@@ -156,12 +178,13 @@ export default function Home() {
           <div className="text-center max-w-2xl mx-auto">
             <h2 className="text-3xl font-bold mb-4">Ready to experience seamless online banking?</h2>
             <p className="text-lg text-blue-100 mb-8">Open a Boapay account today and enjoy a world of convenient financial services.</p>
-            <button 
-              onClick={scrollToRegister}
-              className="inline-flex items-center px-8 py-4 border border-transparent text-base font-medium rounded-md shadow-sm text-primary bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white transition"
+            <Button 
+              size="lg"
+              onClick={scrollToAuth}
+              className="bg-white text-primary hover:bg-gray-100"
             >
               Open an Account Now
-            </button>
+            </Button>
           </div>
         </div>
       </section>
@@ -204,14 +227,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Register Section */}
-      <section ref={registerSectionRef} id="register-section" className="py-16 sm:py-24 bg-gray-50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-md mx-auto">
-            <RegisterForm />
-          </div>
-        </div>
-      </section>
+      {/* Auth Forms Section */}
+      <div ref={authSectionRef}>
+        <AuthForms />
+      </div>
     </>
   );
 }
