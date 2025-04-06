@@ -20,6 +20,8 @@ import session from "express-session";
 
 export interface IStorage {
   sessionStore: session.Store;
+  // Session methods
+  ensureSessionTable(): Promise<void>;
   // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -187,6 +189,14 @@ export class MemStorage implements IStorage {
     // We're calling an async method from a sync constructor
     // This is not ideal, but works for our demo purposes
     this.initializeDummyData().catch(err => console.error("Error initializing dummy data:", err));
+  }
+  
+  // Session methods
+  async ensureSessionTable(): Promise<void> {
+    // Memory storage doesn't need to create a session table
+    // It's just a no-op for API compatibility with DbStorage
+    console.log("Memory session store is already initialized");
+    return Promise.resolve();
   }
 
   // Initialize with some dummy data
@@ -1464,6 +1474,28 @@ export class DbStorage implements IStorage {
     });
   }
   
+  // Session methods
+  async ensureSessionTable(): Promise<void> {
+    try {
+      // Check if sessions table exists
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS "sessions" (
+          "sid" varchar NOT NULL PRIMARY KEY,
+          "sess" json NOT NULL,
+          "expire" timestamp(6) NOT NULL
+        )
+      `);
+      
+      // Create index on expire
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS "IDX_sessions_expire" ON "sessions" ("expire")
+      `);
+    } catch (error) {
+      console.error("Error creating sessions table:", error);
+      throw error;
+    }
+  }
+  
   // User methods
   async getUser(id: number): Promise<User | undefined> {
     const results = await db.select().from(users).where(eq(users.id, id));
@@ -2083,4 +2115,15 @@ const createSessionsTable = async () => {
 createSessionsTable();
 
 // Use DbStorage instead of MemStorage
-export const storage = new DbStorage();
+// Lazy load the storage instance to improve startup time
+let _storage: IStorage | null = null;
+
+export const getStorage = (): IStorage => {
+  if (!_storage) {
+    _storage = new DbStorage();
+  }
+  return _storage;
+};
+
+// For backward compatibility with existing code
+export const storage = getStorage();

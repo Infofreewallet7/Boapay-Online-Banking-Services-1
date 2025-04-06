@@ -40,7 +40,18 @@ function getUserId(req: Request): number | undefined {
   return req.session.userId;
 }
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
+  // Initialize session store asynchronously but don't block server startup
+  (async () => {
+    try {
+      // Make sure session table exists before using it
+      await storage.ensureSessionTable();
+      console.log("Sessions table created or already exists");
+    } catch (error) {
+      console.error("Error ensuring sessions table:", error);
+    }
+  })();
+  
   // Session middleware
   app.use(
     session({
@@ -1689,7 +1700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const httpServer = createServer(app);
+  const httpServer = existingServer || createServer(app);
   
   // Setup WebSocket server on a distinct path to avoid conflict with Vite's HMR
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
