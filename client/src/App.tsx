@@ -18,7 +18,7 @@ import { Loader2 } from "lucide-react";
 
 function Router() {
   const [location] = useLocation();
-  const isAuthenticated = !!queryClient.getQueryData(["api/auth/session"]);
+  const isAuthenticated = !!queryClient.getQueryData(["/api/auth/session"]);
   const isHomePage = location === "/";
   
   const { isLoading, data: user } = useQuery({

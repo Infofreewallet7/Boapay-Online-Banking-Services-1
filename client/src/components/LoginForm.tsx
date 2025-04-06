@@ -184,7 +184,12 @@ export default function LoginForm() {
             </div>
           </div>
           <div className="mt-6">
-            <Button variant="outline" className="w-full">
+            <Button 
+              variant="outline" 
+              className="w-full"
+              type="button"
+              onClick={() => window.location.href = "#register-section"}
+            >
               Create an Account
             </Button>
           </div>
