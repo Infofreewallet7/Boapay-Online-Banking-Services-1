@@ -219,6 +219,21 @@ export const insertUserSchema = createInsertSchema(users).pick({
   phone: true,
 });
 
+// Define account type values for form validation
+export const accountTypes = [
+  { value: "checking", label: "Checking Account" },
+  { value: "savings", label: "Savings Account" },
+  { value: "investment", label: "Investment Account" },
+  { value: "express", label: "Express Transactional Account" }
+];
+
+// Schema for user registration with account type selection
+export const registerUserWithAccountSchema = insertUserSchema.extend({
+  accountType: z.enum(["checking", "savings", "investment", "express"], {
+    required_error: "Please select an account type",
+  }),
+});
+
 export const loginUserSchema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
@@ -392,6 +407,7 @@ export const approveCryptoTransferSchema = z.object({
 
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type RegisterUserWithAccount = z.infer<typeof registerUserWithAccountSchema>;
 export type LoginUser = z.infer<typeof loginUserSchema>;
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;

@@ -4,7 +4,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { insertUserSchema, type InsertUser } from "@shared/schema";
+import { 
+  accountTypes, 
+  registerUserWithAccountSchema, 
+  type RegisterUserWithAccount 
+} from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,12 +24,19 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { z } from "zod";
 
 // Extend the schema with additional validation
-const registerSchema = insertUserSchema.extend({
-  password: insertUserSchema.shape.password.min(8, "Password must be at least 8 characters"),
-  confirmPassword: insertUserSchema.shape.password,
+const registerSchema = registerUserWithAccountSchema.extend({
+  password: registerUserWithAccountSchema.shape.password.min(8, "Password must be at least 8 characters"),
+  confirmPassword: registerUserWithAccountSchema.shape.password,
   agreeToTerms: z.boolean().refine(val => val === true, {
     message: "You must agree to the terms and conditions",
   }),
@@ -35,7 +46,7 @@ const registerSchema = insertUserSchema.extend({
 });
 
 // Create a type that includes the additional fields
-type RegisterFormData = InsertUser & {
+type RegisterFormData = RegisterUserWithAccount & {
   confirmPassword: string;
   agreeToTerms: boolean;
 };
@@ -56,12 +67,13 @@ export default function RegisterForm() {
       lastName: "",
       email: "",
       phone: "",
+      accountType: "checking", // Default account type
       agreeToTerms: false,
     },
   });
   
   const registerMutation = useMutation({
-    mutationFn: async (data: InsertUser) => {
+    mutationFn: async (data: RegisterUserWithAccount) => {
       return apiRequest("POST", "/api/auth/register", data);
     },
     onSuccess: async (response) => {
@@ -181,6 +193,40 @@ export default function RegisterForm() {
                   </FormControl>
                   <FormDescription>
                     This will be used to login to your account
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="accountType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Account Type</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select account type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {accountTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type === 'checking' ? 'Checking Account' : 
+                           type === 'savings' ? 'Savings Account' :
+                           type === 'investment' ? 'Investment Account' :
+                           type === 'express' ? 'Express Transactional Account' : type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Choose the type of account you want to open
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
