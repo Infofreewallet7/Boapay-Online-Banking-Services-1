@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/utils";
 import { BankIcon, getIconForAccountType, getBgColorForAccountType, getTextColorForAccountType } from "@/lib/BankIcons";
 import { type Account } from "@shared/schema";
+import AccountStatement from "@/components/AccountStatement";
 
 interface AccountSummaryProps {
   accounts: Account[];
@@ -199,11 +200,14 @@ function AccountCard({ account, showBalance }: AccountCardProps) {
               {showBalance ? formatCurrency(account.balance, currency) : "••••••"}
             </p>
           </div>
-          <Link to={`/accounts/${account.id}`}>
-            <Button variant="ghost" size="sm" className="h-8 px-2">
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            <AccountStatement accountId={account.id} />
+            <Link to={`/accounts/${account.id}`}>
+              <Button variant="ghost" size="sm" className="h-8 px-2">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
         </div>
       </CardContent>
     </Card>
