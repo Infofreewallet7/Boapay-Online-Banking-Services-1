@@ -1,160 +1,112 @@
-/**
- * Currency Exchange Service
- * 
- * This service handles currency exchange rate operations.
- * In a production app, this would likely call an external API
- * to get real-time exchange rates.
- */
+// Currencies data with symbols and names
+export const currencies = [
+  { code: "USD", name: "US Dollar", symbol: "$" },
+  { code: "EUR", name: "Euro", symbol: "€" },
+  { code: "GBP", name: "British Pound", symbol: "£" },
+  { code: "JPY", name: "Japanese Yen", symbol: "¥" },
+  { code: "CNY", name: "Chinese Yuan", symbol: "¥" },
+  { code: "AUD", name: "Australian Dollar", symbol: "A$" },
+  { code: "CAD", name: "Canadian Dollar", symbol: "C$" },
+  { code: "CHF", name: "Swiss Franc", symbol: "CHF" },
+  { code: "INR", name: "Indian Rupee", symbol: "₹" },
+  { code: "SGD", name: "Singapore Dollar", symbol: "S$" },
+  { code: "NZD", name: "New Zealand Dollar", symbol: "NZ$" },
+  { code: "HKD", name: "Hong Kong Dollar", symbol: "HK$" },
+  { code: "KRW", name: "South Korean Won", symbol: "₩" },
+  { code: "MXN", name: "Mexican Peso", symbol: "Mex$" },
+  { code: "BRL", name: "Brazilian Real", symbol: "R$" },
+  { code: "RUB", name: "Russian Ruble", symbol: "₽" },
+  { code: "ZAR", name: "South African Rand", symbol: "R" },
+  { code: "SEK", name: "Swedish Krona", symbol: "kr" },
+  { code: "NOK", name: "Norwegian Krone", symbol: "kr" },
+  { code: "DKK", name: "Danish Krone", symbol: "kr" },
+];
 
-// Supported currencies
-export enum Currency {
-  USD = "USD",
-  EUR = "EUR",
-  GBP = "GBP",
-  JPY = "JPY",
-  CAD = "CAD",
-  AUD = "AUD",
-  CHF = "CHF",
-  CNY = "CNY",
-  INR = "INR",
-  SGD = "SGD"
-}
-
-// Currency symbols for display
-export const CurrencySymbols: Record<Currency, string> = {
-  [Currency.USD]: "$",
-  [Currency.EUR]: "€",
-  [Currency.GBP]: "£",
-  [Currency.JPY]: "¥",
-  [Currency.CAD]: "CA$",
-  [Currency.AUD]: "A$",
-  [Currency.CHF]: "CHF",
-  [Currency.CNY]: "¥",
-  [Currency.INR]: "₹",
-  [Currency.SGD]: "S$"
+// Exchange rates matrix (relative to USD)
+// These would typically come from an external API
+const exchangeRates: { [key: string]: number } = {
+  USD: 1.0,
+  EUR: 0.92,
+  GBP: 0.78,
+  JPY: 147.72,
+  CNY: 7.23,
+  AUD: 1.51,
+  CAD: 1.36,
+  CHF: 0.89,
+  INR: 83.12,
+  SGD: 1.34,
+  NZD: 1.62,
+  HKD: 7.81,
+  KRW: 1331.22,
+  MXN: 17.09,
+  BRL: 5.01,
+  RUB: 91.25,
+  ZAR: 18.35,
+  SEK: 10.46,
+  NOK: 10.51,
+  DKK: 6.86,
 };
-
-// Currency names for display
-export const CurrencyNames: Record<Currency, string> = {
-  [Currency.USD]: "US Dollar",
-  [Currency.EUR]: "Euro",
-  [Currency.GBP]: "British Pound",
-  [Currency.JPY]: "Japanese Yen",
-  [Currency.CAD]: "Canadian Dollar",
-  [Currency.AUD]: "Australian Dollar",
-  [Currency.CHF]: "Swiss Franc",
-  [Currency.CNY]: "Chinese Yuan",
-  [Currency.INR]: "Indian Rupee",
-  [Currency.SGD]: "Singapore Dollar"
-};
-
-// Static exchange rates (USD to X)
-// In a real app, these would be fetched from an API
-const exchangeRates: Record<Currency, number> = {
-  [Currency.USD]: 1.0,
-  [Currency.EUR]: 0.93,
-  [Currency.GBP]: 0.79,
-  [Currency.JPY]: 149.50,
-  [Currency.CAD]: 1.37,
-  [Currency.AUD]: 1.53,
-  [Currency.CHF]: 0.88,
-  [Currency.CNY]: 7.24,
-  [Currency.INR]: 83.50,
-  [Currency.SGD]: 1.35
-};
-
-/**
- * Get all supported currencies
- */
-export function getSupportedCurrencies(): Currency[] {
-  return Object.values(Currency);
-}
-
-/**
- * Get information about all supported currencies
- */
-export function getCurrencyInfo(): Array<{ code: Currency, name: string, symbol: string }> {
-  return getSupportedCurrencies().map(code => ({
-    code,
-    name: CurrencyNames[code],
-    symbol: CurrencySymbols[code]
-  }));
-}
-
-/**
- * Get exchange rate from one currency to another
- * @param fromCurrency Source currency
- * @param toCurrency Target currency
- */
-export function getExchangeRate(fromCurrency: Currency, toCurrency: Currency): number {
-  // For cross-currency conversions, we convert to USD first, then to the target currency
-  const fromRate = exchangeRates[fromCurrency];
-  const toRate = exchangeRates[toCurrency];
-  
-  // Convert fromCurrency to USD, then USD to toCurrency
-  return toRate / fromRate;
-}
 
 /**
  * Convert an amount from one currency to another
- * @param amount Amount to convert
- * @param fromCurrency Source currency
- * @param toCurrency Target currency
  */
-export function convertCurrency(
-  amount: number,
-  fromCurrency: Currency,
-  toCurrency: Currency
-): number {
-  const rate = getExchangeRate(fromCurrency, toCurrency);
-  return amount * rate;
-}
-
-/**
- * Calculate the fee for an international transfer
- * @param amount Amount to transfer
- * @param fromCurrency Source currency
- * @param toCurrency Target currency
- */
-export function calculateTransferFee(
-  amount: number,
-  fromCurrency: Currency,
-  toCurrency: Currency
-): number {
-  // Base fee rate is 1%
-  let feeRate = 0.01;
-  
-  // Add 0.5% for exotic currency pairs
-  const exoticCurrencies = [Currency.CNY, Currency.INR, Currency.SGD];
-  if (
-    exoticCurrencies.includes(fromCurrency) || 
-    exoticCurrencies.includes(toCurrency)
-  ) {
-    feeRate += 0.005;
+export function convertCurrency(amount: number, fromCurrency: string, toCurrency: string) {
+  if (!exchangeRates[fromCurrency] || !exchangeRates[toCurrency]) {
+    throw new Error("Invalid currency code");
   }
   
-  return amount * feeRate;
+  if (amount <= 0) {
+    throw new Error("Amount must be greater than zero");
+  }
+  
+  // Calculate conversion rates relative to USD
+  const fromRate = exchangeRates[fromCurrency];
+  const toRate = exchangeRates[toCurrency];
+  
+  // Convert to USD first (as the base currency), then to target currency
+  const amountInUsd = amount / fromRate;
+  const convertedAmount = amountInUsd * toRate;
+  
+  // Calculate the direct exchange rate
+  const rate = toRate / fromRate;
+  
+  return {
+    amount,
+    from: fromCurrency,
+    to: toCurrency,
+    rate,
+    convertedAmount,
+    date: new Date().toISOString(),
+  };
 }
 
 /**
- * Get the conversion details for a transfer
+ * Get all available currencies
  */
-export function getTransferConversionDetails(
-  amount: number,
-  fromCurrency: Currency,
-  toCurrency: Currency
-) {
-  const exchangeRate = getExchangeRate(fromCurrency, toCurrency);
-  const fee = calculateTransferFee(amount, fromCurrency, toCurrency);
-  const amountAfterFee = amount - fee;
-  const convertedAmount = amountAfterFee * exchangeRate;
+export function getAllCurrencies() {
+  return currencies;
+}
+
+/**
+ * Get exchange rates for a specific base currency
+ */
+export function getExchangeRates(baseCurrency: string) {
+  if (!exchangeRates[baseCurrency]) {
+    throw new Error("Invalid currency code");
+  }
+  
+  const rates: { [key: string]: number } = {};
+  const baseRate = exchangeRates[baseCurrency];
+  
+  Object.entries(exchangeRates).forEach(([currency, rate]) => {
+    if (currency !== baseCurrency) {
+      rates[currency] = rate / baseRate;
+    }
+  });
   
   return {
-    exchangeRate,
-    fee,
-    amountAfterFee,
-    convertedAmount,
-    fromCurrency,
-    toCurrency
+    base: baseCurrency,
+    date: new Date().toISOString(),
+    rates,
   };
 }

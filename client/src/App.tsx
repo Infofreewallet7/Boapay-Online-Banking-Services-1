@@ -10,6 +10,7 @@ import Transactions from "@/pages/Transactions";
 import Payments from "@/pages/Payments";
 import Support from "@/pages/Support";
 import Settings from "@/pages/Settings";
+import CurrencyTools from "@/pages/CurrencyTools";
 import AuthPage from "@/pages/auth-page";
 import AppHeader from "./components/AppHeader";
 import Footer from "./components/Footer";
@@ -30,6 +31,7 @@ function Router() {
           {/* Public routes */}
           <Route path="/" component={Home} />
           <Route path="/auth" component={AuthPage} />
+          <Route path="/currency-tools" component={CurrencyTools} />
           
           {/* Protected routes - require authentication */}
           <ProtectedRoute path="/dashboard" component={Dashboard} />

@@ -96,6 +96,7 @@ export interface IStorage {
   // Cryptocurrency methods
   getCryptocurrency(id: number): Promise<CryptocurrencyType | undefined>;
   getCryptocurrencyByCode(code: string): Promise<CryptocurrencyType | undefined>;
+  getCryptocurrencyBySymbol(symbol: string): Promise<CryptocurrencyType | undefined>;
   getAllCryptocurrencies(): Promise<CryptocurrencyType[]>;
   getAvailableCryptocurrencies(): Promise<CryptocurrencyType[]>;
   createCryptocurrency(crypto: InsertCryptocurrency): Promise<CryptocurrencyType>;
@@ -1883,6 +1884,11 @@ export class DbStorage implements IStorage {
   
   async getCryptocurrencyByCode(code: string): Promise<CryptocurrencyType | undefined> {
     const results = await db.select().from(cryptocurrencies).where(eq(cryptocurrencies.code, code));
+    return results[0];
+  }
+  
+  async getCryptocurrencyBySymbol(symbol: string): Promise<CryptocurrencyType | undefined> {
+    const results = await db.select().from(cryptocurrencies).where(eq(cryptocurrencies.symbol, symbol));
     return results[0];
   }
   

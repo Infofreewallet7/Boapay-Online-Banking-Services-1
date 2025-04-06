@@ -16,7 +16,6 @@ externalPort = 5173
 
 [[ports]]
 localPort = 5000
-externalPort = 80
 
 [workflows]
 runButton = "Project"
@@ -35,7 +34,7 @@ name = "Start application"
 author = "agent"
 
 [workflows.workflow.metadata]
-agentRequireRestartOnSave = false
+agentRequireRestartOnSave = true
 
 [[workflows.workflow.tasks]]
 task = "packager.installForAll"

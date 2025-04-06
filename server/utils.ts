@@ -1,4 +1,4 @@
-import { Currency, CurrencySymbols } from './services/currencyService';
+import { currencies } from './services/currencyService';
 
 /**
  * Format a number as a currency string
@@ -9,8 +9,9 @@ import { Currency, CurrencySymbols } from './services/currencyService';
 export function formatCurrency(amount: number | string, currencyCode: string = 'USD'): string {
   const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
   
-  // Use the currency code to get the symbol
-  const symbol = CurrencySymbols[currencyCode as Currency] || '$';
+  // Find the currency in our currencies array to get the symbol
+  const currency = currencies.find(c => c.code === currencyCode);
+  const symbol = currency?.symbol || '$';
   
   // Format the amount with 2 decimal places
   return `${symbol}${numericAmount.toFixed(2)}`;

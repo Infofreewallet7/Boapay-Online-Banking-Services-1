@@ -26,9 +26,10 @@ import {
 } from "@shared/schema";
 import { suggestTransactionCategory, getSimilarCategorizedTransactions } from "./services/openai";
 import { 
-  getCurrencyInfo, 
-  getTransferConversionDetails, 
-  Currency
+  convertCurrency, 
+  getAllCurrencies, 
+  getExchangeRates,
+  currencies
 } from "./services/currencyService";
 import { generateStatementData, generatePdfStatement } from "./services/statementService";
 import { nanoid } from "nanoid";
@@ -661,11 +662,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const targetCurrency = externalAccount.currency;
       
       // Calculate conversion details and fees using the currency service
-      const conversionDetails = getTransferConversionDetails(
-        transferAmount,
-        sourceCurrency as Currency,
-        targetCurrency as Currency
-      );
+      const conversion = convertCurrency(transferAmount, sourceCurrency, targetCurrency);
+      
+      // Add fee calculation (2% of amount)
+      const fee = transferAmount * 0.02;
+      const amountAfterConversionFee = transferAmount - fee;
+      
+      const conversionDetails = {
+        exchangeRate: conversion.rate,
+        fee,
+        amountAfterFee: amountAfterConversionFee,
+        convertedAmount: conversion.convertedAmount
+      };
       
       const { 
         exchangeRate, 
@@ -760,15 +768,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get source and target currencies
-      const sourceCurrency = transfer.sourceCurrency as Currency;
-      const targetCurrency = transfer.targetCurrency as Currency;
+      const sourceCurrency = transfer.sourceCurrency;
+      const targetCurrency = transfer.targetCurrency;
       
-      // Calculate current conversion details
-      const currentConversionDetails = getTransferConversionDetails(
+      // Calculate current conversion details using our currency service
+      const conversion = convertCurrency(
         parseFloat(transfer.amount),
         sourceCurrency,
         targetCurrency
       );
+      
+      // Add fee calculation (2% of amount)
+      const amount = parseFloat(transfer.amount);
+      const feeAmount = amount * 0.02;
+      const amountAfterFee = amount - feeAmount;
+      
+      const currentConversionDetails = {
+        exchangeRate: conversion.rate,
+        convertedAmount: conversion.convertedAmount,
+        fee: feeAmount,
+        amountAfterFee: amountAfterFee
+      };
       
       // Create response with both original and current conversion details
       const response = {
@@ -791,7 +811,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Currency routes
   app.get("/api/currencies", async (req, res) => {
     try {
-      const currencies = getCurrencyInfo();
+      const currencies = getAllCurrencies();
       res.json(currencies);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching currencies" });
@@ -815,22 +835,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid amount" });
       }
       
-      // Check if currencies are valid
-      const validCurrencies = Object.values(Currency);
-      if (!validCurrencies.includes(fromCurrency as Currency) || 
-          !validCurrencies.includes(toCurrency as Currency)) {
-        return res.status(400).json({ message: "Invalid currency code" });
-      }
-      
-      const conversionDetails = getTransferConversionDetails(
+      // Convert currency using our currency service
+      const conversionDetails = convertCurrency(
         numericAmount,
-        fromCurrency as Currency,
-        toCurrency as Currency
+        fromCurrency,
+        toCurrency
       );
       
       res.json(conversionDetails);
     } catch (error) {
-      res.status(500).json({ message: "An error occurred during currency conversion" });
+      if (error instanceof Error) {
+        res.status(400).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "An error occurred during currency conversion" });
+      }
     }
   });
 
@@ -1624,6 +1642,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Currency Routes
+  app.get("/api/currencies", (req, res) => {
+    try {
+      res.json(getAllCurrencies());
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch currencies" });
+    }
+  });
+
+  app.post("/api/convert-currency", (req, res) => {
+    try {
+      const { amount, from, to } = req.body;
+      
+      if (!amount || !from || !to) {
+        return res.status(400).json({ message: "Missing required parameters" });
+      }
+      
+      const amountValue = parseFloat(amount);
+      
+      if (isNaN(amountValue) || amountValue <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+      
+      const result = convertCurrency(amountValue, from, to);
+      res.json(result);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to convert currency";
+      res.status(500).json({ message: errorMessage });
+    }
+  });
+
+  app.get("/api/exchange-rates/:currency", (req, res) => {
+    try {
+      const baseCurrency = req.params.currency;
+      
+      if (!baseCurrency) {
+        return res.status(400).json({ message: "Missing base currency" });
+      }
+      
+      const rates = getExchangeRates(baseCurrency);
+      res.json(rates);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch exchange rates";
+      res.status(500).json({ message: errorMessage });
+    }
+  });
+
   const httpServer = createServer(app);
   
   // Setup WebSocket server on a distinct path to avoid conflict with Vite's HMR
@@ -1828,6 +1893,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "An error occurred while getting similar transactions" });
     }
   });
+  
+  // Currency conversion endpoints are now defined earlier in the file
   
   return httpServer;
 }
