@@ -1,7 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
-import MemoryStore from "memorystore";
 import { storage } from "./storage";
 import { 
   loginUserSchema, 
@@ -28,10 +27,12 @@ import {
 import { generateStatementData, generatePdfStatement } from "./services/statementService";
 import { nanoid } from "nanoid";
 
+// Helper function to get userId from session
+function getUserId(req: Request): number | undefined {
+  return req.session.userId;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Create session store
-  const SessionStore = MemoryStore(session);
-  
   // Session middleware
   app.use(
     session({
@@ -39,15 +40,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       resave: false,
       saveUninitialized: false,
       cookie: { secure: process.env.NODE_ENV === "production", maxAge: 86400000 }, // 24 hours
-      store: new SessionStore({
-        checkPeriod: 86400000, // prune expired entries every 24h
-      }),
+      store: storage.sessionStore,
     })
   );
   
   // Authentication middleware
   const requireAuth = (req: Request, res: Response, next: Function) => {
-    if (!req.session.userId) {
+    const userId = getUserId(req);
+    if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
     next();
@@ -71,7 +71,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Store user ID in session
-      (req.session as any).userId = user.id;
+      req.session.userId = user.id;
       
       // Return user data without password
       const { password: _, ...userData } = user;
@@ -103,7 +103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser(userData);
       
       // Store user ID in session
-      (req.session as any).userId = user.id;
+      req.session.userId = user.id;
       
       // Return user data without password
       const { password, ...newUserData } = user;
@@ -114,12 +114,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   app.get("/api/auth/session", async (req, res) => {
-    if (!(req.session as any).userId) {
+    const userId = getUserId(req);
+    if (!userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
     
     try {
-      const user = await storage.getUser((req.session as any).userId);
+      const user = await storage.getUser(userId);
       
       if (!user) {
         req.session.destroy(() => {});
@@ -143,7 +144,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Account Routes
   app.get("/api/accounts", requireAuth, async (req, res) => {
     try {
-      const accounts = await storage.getUserAccounts((req.session as any).userId as number);
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const accounts = await storage.getUserAccounts(userId);
       res.json(accounts);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching accounts" });
@@ -160,7 +165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== (req.session as any).userId) {
+      if (account.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -173,7 +178,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Transaction Routes
   app.get("/api/transactions", requireAuth, async (req, res) => {
     try {
-      const transactions = await storage.getUserTransactions((req.session as any).userId as number);
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const transactions = await storage.getUserTransactions(userId);
       res.json(transactions);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching transactions" });
@@ -190,7 +199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== (req.session as any).userId) {
+      if (account.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -227,7 +236,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the source account belongs to the current user
-      if (sourceAccount.userId !== (req.session as any).userId) {
+      if (sourceAccount.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -280,7 +289,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bill Routes
   app.get("/api/bills", requireAuth, async (req, res) => {
     try {
-      const bills = await storage.getUserBills((req.session as any).userId as number);
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const bills = await storage.getUserBills(userId);
       res.json(bills);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching bills" });
@@ -313,7 +326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== (req.session as any).userId) {
+      if (account.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -324,7 +337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the bill belongs to the current user
-      if (bill.userId !== (req.session as any).userId) {
+      if (bill.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -371,7 +384,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // External Bank Account Routes
   app.get("/api/external-bank-accounts", requireAuth, async (req, res) => {
     try {
-      const accounts = await storage.getUserExternalBankAccounts((req.session as any).userId as number);
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const accounts = await storage.getUserExternalBankAccounts(userId);
       res.json(accounts);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching external bank accounts" });
@@ -388,7 +405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== (req.session as any).userId) {
+      if (account.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -412,7 +429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Add the current user's ID to the data
       const accountData = {
         ...validatedData.data,
-        userId: (req.session as any).userId as number,
+        userId: req.session.userId,
       };
       
       const account = await storage.createExternalBankAccount(accountData);
@@ -432,7 +449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== (req.session as any).userId) {
+      if (account.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -462,7 +479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== (req.session as any).userId) {
+      if (account.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -476,7 +493,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // International Transfer Routes
   app.get("/api/international-transfers", requireAuth, async (req, res) => {
     try {
-      const transfers = await storage.getUserInternationalTransfers((req.session as any).userId as number);
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const transfers = await storage.getUserInternationalTransfers(userId);
       res.json(transfers);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching international transfers" });
@@ -493,7 +514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== (req.session as any).userId) {
+      if (account.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -529,7 +550,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the source account belongs to the current user
-      if (sourceAccount.userId !== (req.session as any).userId) {
+      if (sourceAccount.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -540,7 +561,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the external account belongs to the current user
-      if (externalAccount.userId !== (req.session as any).userId) {
+      if (externalAccount.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -643,7 +664,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the source account belongs to the current user
-      if (sourceAccount.userId !== (req.session as any).userId) {
+      if (sourceAccount.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -735,7 +756,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== (req.session as any).userId) {
+      if (account.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -769,7 +790,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the account belongs to the current user
-      if (account.userId !== (req.session as any).userId) {
+      if (account.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -828,7 +849,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Loan Application Routes
   app.get("/api/loan-applications", requireAuth, async (req, res) => {
     try {
-      const applications = await storage.getUserLoanApplications((req.session as any).userId as number);
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const applications = await storage.getUserLoanApplications(userId);
       res.json(applications);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching loan applications" });
@@ -861,14 +886,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ message: "Account not found" });
         }
         
-        if (account.userId !== (req.session as any).userId) {
+        if (account.userId !== req.session.userId) {
           return res.status(403).json({ message: "Access denied" });
         }
       }
       
       // Create loan application
       const loanApplication = await storage.createLoanApplication({
-        userId: (req.session as any).userId as number,
+        userId: req.session.userId,
         loanId,
         accountId,
         requestedAmount,
@@ -899,7 +924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the application belongs to the current user
-      if (application.userId !== (req.session as any).userId) {
+      if (application.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -912,7 +937,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin routes for loan applications
   app.get("/api/admin/loan-applications/pending", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser((req.session as any).userId as number);
+      const user = await storage.getUser(req.session.userId);
       
       if (!user || user.role !== "admin") {
         return res.status(403).json({ message: "Access denied" });
@@ -927,7 +952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/loan-applications/:id/approve", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser((req.session as any).userId as number);
+      const user = await storage.getUser(req.session.userId);
       
       if (!user || user.role !== "admin") {
         return res.status(403).json({ message: "Access denied" });
@@ -965,7 +990,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/loan-applications/:id/reject", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser((req.session as any).userId as number);
+      const user = await storage.getUser(req.session.userId);
       
       if (!user || user.role !== "admin") {
         return res.status(403).json({ message: "Access denied" });
@@ -1011,7 +1036,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/crypto-accounts", requireAuth, async (req, res) => {
     try {
-      const accounts = await storage.getUserCryptoAccounts((req.session as any).userId as number);
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const accounts = await storage.getUserCryptoAccounts(userId);
       res.json(accounts);
     } catch (error) {
       res.status(500).json({ message: "An error occurred while fetching crypto accounts" });
@@ -1044,7 +1073,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the source account belongs to the current user
-      if (sourceAccount.userId !== (req.session as any).userId) {
+      if (sourceAccount.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -1064,13 +1093,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cryptoAmount = (purchaseAmount / cryptoRate).toFixed(8);
       
       // Check if user already has a crypto account for this currency
-      let cryptoAccount = (await storage.getUserCryptoAccounts((req.session as any).userId as number))
+      let cryptoAccount = (await storage.getUserCryptoAccounts(req.session.userId))
         .find(account => account.currency === cryptoSymbol);
       
       // If not, create one
       if (!cryptoAccount) {
         cryptoAccount = await storage.createCryptoAccount({
-          userId: (req.session as any).userId as number,
+          userId: req.session.userId,
           accountName: `${cryptoSymbol} Account`,
           accountNumber: `CRYPTO-${nanoid(8).toUpperCase()}`,
           accountType: "crypto",
@@ -1154,7 +1183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the source account belongs to the current user
-      if (sourceAccount.userId !== (req.session as any).userId) {
+      if (sourceAccount.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -1176,13 +1205,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const targetAmount = (sourceUsdValue / parseFloat(targetCrypto.usdRate)).toFixed(8);
       
       // Check if user already has a target crypto account
-      let targetAccount = (await storage.getUserCryptoAccounts((req.session as any).userId as number))
+      let targetAccount = (await storage.getUserCryptoAccounts(req.session.userId))
         .find(account => account.currency === toSymbol);
       
       // If not, create one
       if (!targetAccount) {
         targetAccount = await storage.createCryptoAccount({
-          userId: (req.session as any).userId as number,
+          userId: req.session.userId,
           accountName: `${toSymbol} Account`,
           accountNumber: `CRYPTO-${nanoid(8).toUpperCase()}`,
           accountType: "crypto",
@@ -1268,7 +1297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the source account belongs to the current user
-      if (sourceAccount.userId !== (req.session as any).userId) {
+      if (sourceAccount.userId !== req.session.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -1294,7 +1323,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create transfer request
       const transferRequest = await storage.createCryptoTransferRequest({
         type: "external_transfer",
-        userId: (req.session as any).userId as number,
+        userId: req.session.userId,
         amount: transferAmount.toString(),
         description: `External transfer to ${externalAddress}`,
         targetCurrency: sourceAccount.currency,
@@ -1320,7 +1349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get Crypto Transfer Requests
   app.get("/api/crypto/transfer-requests", requireAuth, async (req, res) => {
     try {
-      const userId = (req.session as any).userId as number;
+      const userId = req.session.userId;
       const user = await storage.getUser(userId);
       
       if (!user) {
@@ -1346,7 +1375,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/crypto/transfer-requests/:id/approve", requireAuth, async (req, res) => {
     try {
       const requestId = parseInt(req.params.id);
-      const userId = (req.session as any).userId as number;
+      const userId = req.session.userId;
       
       // Check if user is admin
       const user = await storage.getUser(userId);
@@ -1428,7 +1457,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/crypto/transfer-requests/:id/reject", requireAuth, async (req, res) => {
     try {
       const requestId = parseInt(req.params.id);
-      const userId = (req.session as any).userId as number;
+      const userId = req.session.userId;
       
       // Check if user is admin
       const user = await storage.getUser(userId);
