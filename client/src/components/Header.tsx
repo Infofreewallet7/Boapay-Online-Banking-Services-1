@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Menu, X, User, CreditCard, LogOut, BarChart, Settings } from "lucide-react";
+import { Menu, X, CreditCard, LogOut, BarChart, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import WebSocketNotifications from "@/components/WebSocketNotifications";
+import { User } from "@shared/schema";
 
 export default function Header() {
   const [, setLocation] = useLocation();
@@ -21,7 +23,7 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { toast } = useToast();
   
-  const { data: user } = useQuery({
+  const { data: user } = useQuery<User>({
     queryKey: ["/api/auth/session"],
     retry: false,
   });
@@ -100,42 +102,45 @@ export default function Header() {
           
           <div className="hidden md:flex md:items-center">
             {isAuthenticated ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-semibold">
-                      {user.firstName ? user.firstName[0] : ""}
-                      {user.lastName ? user.lastName[0] : ""}
-                    </div>
-                    <span className="font-medium">
-                      {user.firstName} {user.lastName}
-                    </span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem onClick={() => setLocation("/dashboard")}>
-                      <BarChart className="mr-2 h-4 w-4" />
-                      <span>Dashboard</span>
+              <div className="flex items-center space-x-4">
+                <WebSocketNotifications />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-semibold">
+                        {user?.firstName ? user.firstName[0] : ""}
+                        {user?.lastName ? user.lastName[0] : ""}
+                      </div>
+                      <span className="font-medium">
+                        {user?.firstName} {user?.lastName}
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem onClick={() => setLocation("/dashboard")}>
+                        <BarChart className="mr-2 h-4 w-4" />
+                        <span>Dashboard</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setLocation("/accounts")}>
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        <span>Accounts</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setLocation("/settings")}>
+                        <Settings className="mr-2 h-4 w-4" />
+                        <span>Settings</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Log out</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setLocation("/accounts")}>
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      <span>Accounts</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setLocation("/settings")}>
-                      <Settings className="mr-2 h-4 w-4" />
-                      <span>Settings</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Log out</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             ) : (
               location !== "/" && (
                 <Link to="/">
@@ -200,12 +205,12 @@ export default function Header() {
               <div className="pt-4 pb-3 border-t border-gray-200">
                 <div className="flex items-center px-3">
                   <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white text-sm font-semibold">
-                    {user.firstName ? user.firstName[0] : ""}
-                    {user.lastName ? user.lastName[0] : ""}
+                    {user?.firstName ? user.firstName[0] : ""}
+                    {user?.lastName ? user.lastName[0] : ""}
                   </div>
                   <div className="ml-3">
-                    <p className="text-base font-medium text-gray-800">{user.firstName} {user.lastName}</p>
-                    <p className="text-sm text-gray-500">{user.email}</p>
+                    <p className="text-base font-medium text-gray-800">{user?.firstName} {user?.lastName}</p>
+                    <p className="text-sm text-gray-500">{user?.email}</p>
                   </div>
                 </div>
                 <div className="mt-3 px-3">
