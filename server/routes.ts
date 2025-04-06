@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import session from "express-session";
 import { WebSocketServer, WebSocket } from "ws";
+import session from "express-session";
 import { storage } from "./storage";
 import { 
   loginUserSchema, 
@@ -1544,8 +1544,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup WebSocket server on a distinct path to avoid conflict with Vite's HMR
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
   
+  // Store WebSocket clients for broadcasting
+  const clients = new Set<WebSocket>();
+  
   wss.on('connection', (ws) => {
     console.log('WebSocket client connected');
+    clients.add(ws);
     
     // Send a welcome message to the client
     ws.send(JSON.stringify({ type: 'info', message: 'Connected to Boapay WebSocket server' }));
@@ -1572,10 +1576,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Handle disconnection
     ws.on('close', () => {
       console.log('WebSocket client disconnected');
+      clients.delete(ws);
     });
   });
   
+  // Utility function to broadcast messages to all connected clients
+  const broadcastToAll = (message: any) => {
+    clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(message));
+      }
+    });
+  };
+  
   console.log('WebSocket server initialized on path: /ws');
+  
+  // API endpoint to send notifications (for testing purposes)
+  app.post("/api/notifications/send", requireAuth, async (req, res) => {
+    try {
+      const { message } = req.body;
+      
+      if (!message) {
+        return res.status(400).json({ message: "Message is required" });
+      }
+      
+      // Get current user info for personalized notification
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+      
+      // Send the notification to all connected clients
+      broadcastToAll({
+        type: 'notification',
+        message: `${message} from ${user.firstName}`,
+        timestamp: new Date().toISOString(),
+        sender: {
+          id: user.id,
+          name: `${user.firstName} ${user.lastName}`,
+        }
+      });
+      
+      res.status(200).json({ message: "Notification sent successfully" });
+    } catch (error) {
+      console.error("Error sending notification:", error);
+      res.status(500).json({ message: "An error occurred while sending notification" });
+    }
+  });
   
   return httpServer;
 }
