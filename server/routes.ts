@@ -18,8 +18,11 @@ import {
   cryptoPurchaseSchema,
   cryptoExchangeSchema,
   insertCryptoTransferRequestSchema,
-  approveCryptoTransferSchema
+  approveCryptoTransferSchema,
+  transactionCategorizationSchema,
+  categorySuggestionSchema
 } from "@shared/schema";
+import { suggestTransactionCategory, getSimilarCategorizedTransactions } from "./services/openai";
 import { 
   getCurrencyInfo, 
   getTransferConversionDetails, 
@@ -1626,6 +1629,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error sending notification:", error);
       res.status(500).json({ message: "An error occurred while sending notification" });
+    }
+  });
+  
+  // Transaction Categorization Routes
+  app.get("/api/transactions/categories", requireAuth, async (req, res) => {
+    try {
+      const categories = await storage.getTransactionCategories();
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      res.status(500).json({ message: "An error occurred while fetching categories" });
+    }
+  });
+  
+  app.get("/api/transactions/categories/:category/subcategories", requireAuth, async (req, res) => {
+    try {
+      const { category } = req.params;
+      const subcategories = await storage.getTransactionSubcategories(category);
+      res.json(subcategories);
+    } catch (error) {
+      console.error("Error fetching subcategories:", error);
+      res.status(500).json({ message: "An error occurred while fetching subcategories" });
+    }
+  });
+  
+  app.post("/api/transactions/:id/categorize", requireAuth, async (req, res) => {
+    try {
+      const transactionId = parseInt(req.params.id);
+      const requestData = {
+        ...req.body,
+        transactionId // Add the ID from the URL params to the request body
+      };
+      
+      const validatedData = transactionCategorizationSchema.safeParse(requestData);
+      
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      const { category, subcategory, tags, notes } = validatedData.data;
+      
+      // Get the transaction
+      const transaction = await storage.getTransaction(transactionId);
+      if (!transaction) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+      
+      // Get the account to check ownership
+      const account = await storage.getAccount(transaction.accountId);
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      
+      // Check if the account belongs to the current user
+      if (account.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Update the transaction category
+      const updatedTransaction = await storage.updateTransactionCategory(
+        transactionId, 
+        category, 
+        subcategory, 
+        tags, 
+        notes
+      );
+      
+      res.json(updatedTransaction);
+    } catch (error) {
+      console.error("Error categorizing transaction:", error);
+      res.status(500).json({ message: "An error occurred while categorizing transaction" });
+    }
+  });
+  
+  app.post("/api/transactions/suggest-category", requireAuth, async (req, res) => {
+    try {
+      const validatedData = categorySuggestionSchema.safeParse(req.body);
+      
+      if (!validatedData.success) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: validatedData.error.errors 
+        });
+      }
+      
+      // Call OpenAI API to get category suggestions
+      const suggestion = await suggestTransactionCategory(validatedData.data);
+      res.json(suggestion);
+    } catch (error) {
+      console.error("Error getting category suggestion:", error);
+      res.status(500).json({ message: "An error occurred while getting category suggestion" });
+    }
+  });
+  
+  app.get("/api/transactions/similar-descriptions", requireAuth, async (req, res) => {
+    try {
+      const { description, limit } = req.query;
+      
+      if (!description) {
+        return res.status(400).json({ message: "Description is required" });
+      }
+      
+      // Call OpenAI API to get similar transactions
+      const similar = await getSimilarCategorizedTransactions(
+        description as string, 
+        limit ? parseInt(limit as string) : undefined
+      );
+      
+      res.json(similar);
+    } catch (error) {
+      console.error("Error getting similar transactions:", error);
+      res.status(500).json({ message: "An error occurred while getting similar transactions" });
     }
   });
   

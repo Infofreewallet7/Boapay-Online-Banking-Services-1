@@ -4,7 +4,8 @@ import {
   ArrowDownLeft, 
   Info, 
   Download, 
-  Filter
+  Filter,
+  Tag as TagIcon
 } from "lucide-react";
 import { 
   Card, 
@@ -22,11 +23,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { type Transaction, type Account } from "@shared/schema";
+import TransactionCategorizationDialog from "./TransactionCategorizationDialog";
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -121,8 +124,9 @@ export default function TransactionList({ transactions, accounts }: TransactionL
                   <p className="text-sm font-medium text-gray-500">Transaction Type</p>
                   <p className="text-base font-semibold capitalize">{selectedTransaction.type}</p>
                 </div>
-                <Badge variant={selectedTransaction.status === 'completed' ? 'success' : 
-                              selectedTransaction.status === 'pending' ? 'outline' : 'destructive'}>
+                <Badge variant={selectedTransaction.status === 'completed' ? 'default' : 
+                              selectedTransaction.status === 'pending' ? 'outline' : 'destructive'}
+                      className={selectedTransaction.status === 'completed' ? 'bg-green-500' : ''}>
                   {selectedTransaction.status}
                 </Badge>
               </div>
@@ -181,7 +185,58 @@ export default function TransactionList({ transactions, accounts }: TransactionL
                   </div>
                 </>
               )}
+              
+              {/* Category Information */}
+              {selectedTransaction.category && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm font-medium text-gray-500">Category</p>
+                      <Badge className="capitalize">{selectedTransaction.category}</Badge>
+                    </div>
+                    
+                    {selectedTransaction.subcategory && (
+                      <div className="flex justify-between items-center">
+                        <p className="text-sm font-medium text-gray-500">Subcategory</p>
+                        <Badge variant="outline" className="capitalize">{selectedTransaction.subcategory}</Badge>
+                      </div>
+                    )}
+                    
+                    {selectedTransaction.tags && selectedTransaction.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {selectedTransaction.tags.map((tag, index) => (
+                          <Badge key={index} variant="secondary" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {selectedTransaction.notes && (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium text-gray-500">Notes</p>
+                        <p className="text-sm text-gray-700 mt-1">{selectedTransaction.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
+          )}
+          
+          {selectedTransaction && (
+            <DialogFooter>
+              <TransactionCategorizationDialog 
+                transaction={selectedTransaction}
+                trigger={
+                  <Button variant="outline">
+                    <TagIcon className="h-4 w-4 mr-2" />
+                    {selectedTransaction.category ? 'Edit Category' : 'Add Category'}
+                  </Button>
+                }
+              />
+            </DialogFooter>
           )}
         </DialogContent>
       </Dialog>

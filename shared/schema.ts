@@ -45,6 +45,10 @@ export const transactions = pgTable("transactions", {
   isApproved: boolean("is_approved").default(false), // Admin approval
   approvedById: integer("approved_by_id").references(() => users.id),
   approvedAt: timestamp("approved_at"),
+  category: text("category"), // 'shopping', 'food', 'utilities', 'entertainment', etc.
+  subcategory: text("subcategory"), // More specific categorization
+  tags: text("tags").array(), // Custom tags for the transaction
+  notes: text("notes"), // Additional user notes
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -362,6 +366,20 @@ export const cryptoPurchaseSchema = z.object({
   amount: z.string().min(1, "Amount is required"),
 });
 
+export const transactionCategorizationSchema = z.object({
+  transactionId: z.number().int().positive("Transaction ID is required"),
+  category: z.string().min(1, "Category is required"),
+  subcategory: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  notes: z.string().optional(),
+});
+
+export const categorySuggestionSchema = z.object({
+  description: z.string().min(1, "Transaction description is required"),
+  amount: z.string().min(1, "Amount is required"),
+  type: z.string().min(1, "Transaction type is required"),
+});
+
 export const cryptoExchangeSchema = z.object({
   fromAccountId: z.number().int().positive("Source account is required"),
   toSymbol: z.string().min(1, "Destination cryptocurrency symbol is required"),
@@ -400,6 +418,8 @@ export type InsertCryptoTransferRequest = z.infer<typeof insertCryptoTransferReq
 export type CryptoPurchase = z.infer<typeof cryptoPurchaseSchema>;
 export type CryptoExchange = z.infer<typeof cryptoExchangeSchema>;
 export type ApproveCryptoTransfer = z.infer<typeof approveCryptoTransferSchema>;
+export type TransactionCategorization = z.infer<typeof transactionCategorizationSchema>;
+export type CategorySuggestion = z.infer<typeof categorySuggestionSchema>;
 
 export type User = typeof users.$inferSelect;
 export type Account = typeof accounts.$inferSelect;
