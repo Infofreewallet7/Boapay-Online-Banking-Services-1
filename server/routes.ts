@@ -16,6 +16,7 @@ import {
   getTransferConversionDetails, 
   Currency
 } from "./services/currencyService";
+import { generateStatementData, generatePdfStatement } from "./services/statementService";
 import { nanoid } from "nanoid";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -709,6 +710,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(conversionDetails);
     } catch (error) {
       res.status(500).json({ message: "An error occurred during currency conversion" });
+    }
+  });
+
+  // Account Statement Routes
+  app.get("/api/accounts/:id/statement", requireAuth, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      const { startDate, endDate, includeAll } = req.query;
+      
+      // Get account
+      const account = await storage.getAccount(accountId);
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      
+      // Check if the account belongs to the current user
+      if (account.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Generate statement data
+      const statementData = await generateStatementData({
+        accountId,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+        includeAllTransactions: includeAll === 'true'
+      });
+      
+      res.json(statementData);
+    } catch (error) {
+      res.status(500).json({ 
+        message: "An error occurred while generating account statement",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+  
+  // Download Account Statement as PDF
+  app.get("/api/accounts/:id/statement/pdf", requireAuth, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      const { startDate, endDate, includeAll } = req.query;
+      
+      // Get account
+      const account = await storage.getAccount(accountId);
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      
+      // Check if the account belongs to the current user
+      if (account.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Generate statement data
+      const statementData = await generateStatementData({
+        accountId,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+        includeAllTransactions: includeAll === 'true'
+      });
+      
+      // Generate PDF
+      const doc = generatePdfStatement(statementData);
+      
+      // Set response headers
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="statement-${account.accountNumber}.pdf"`);
+      
+      // Pipe the PDF to the response
+      doc.pipe(res);
+      doc.end();
+      
+    } catch (error) {
+      res.status(500).json({ 
+        message: "An error occurred while generating PDF statement",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
