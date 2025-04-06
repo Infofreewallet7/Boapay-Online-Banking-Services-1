@@ -34,6 +34,7 @@ export const transactions = pgTable("transactions", {
   status: text("status").notNull(), // 'pending', 'completed', 'failed'
   receiverAccount: text("receiver_account"),
   senderAccount: text("sender_account"),
+  currency: varchar("currency", { length: 3 }).default("USD"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
