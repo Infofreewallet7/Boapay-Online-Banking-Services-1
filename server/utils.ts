@@ -17,12 +17,35 @@ export function formatCurrency(amount: number | string, currencyCode: string = '
 }
 
 /**
- * Generate a random account number
- * @param prefix - Optional prefix for the account number (default: 1000)
- * @param length - Length of the random part (default: 6)
- * @returns A random account number
+ * Enum for account types with their corresponding prefixes
  */
-export function generateRandomAccountNumber(prefix: string = '1000', length: number = 6): string {
+export enum AccountType {
+  Savings = 'savings',
+  Checking = 'checking',
+  Investment = 'investment',
+  Express = 'express'
+}
+
+/**
+ * Map of account type prefixes for account number generation
+ */
+export const AccountTypePrefixes: Record<AccountType, string> = {
+  [AccountType.Savings]: '2000',
+  [AccountType.Checking]: '1000',
+  [AccountType.Investment]: '3000',
+  [AccountType.Express]: '4000'
+};
+
+/**
+ * Generate a random account number based on account type
+ * @param accountType - The type of account (checking, savings, investment, express)
+ * @param length - Length of the random part (default: 6)
+ * @returns A random account number with appropriate prefix for the account type
+ */
+export function generateRandomAccountNumber(accountType: string = AccountType.Checking, length: number = 6): string {
+  // Get the prefix for the account type or use checking account prefix as default
+  const prefix = AccountTypePrefixes[accountType as AccountType] || AccountTypePrefixes[AccountType.Checking];
+  
   const randomPart = Array.from(
     { length },
     () => Math.floor(Math.random() * 10).toString()

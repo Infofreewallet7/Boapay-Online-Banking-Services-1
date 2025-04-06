@@ -5,7 +5,8 @@ import session from "express-session";
 import { storage } from "./storage";
 import { 
   loginUserSchema, 
-  insertUserSchema, 
+  insertUserSchema,
+  registerUserWithAccountSchema,
   transferFundsSchema, 
   billPaymentSchema,
   insertExternalBankAccountSchema,
@@ -89,7 +90,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const validatedData = insertUserSchema.safeParse(req.body);
+      // Use the new schema that includes accountType
+      const validatedData = registerUserWithAccountSchema.safeParse(req.body);
       
       if (!validatedData.success) {
         return res.status(400).json({ 
@@ -98,7 +100,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const userData = validatedData.data;
+      // Extract account type from validated data and remove it from user data
+      const { accountType, ...userData } = validatedData.data;
       
       // Check if username already exists
       const existingUser = await storage.getUserByUsername(userData.username);
@@ -106,15 +109,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ message: "Username already exists" });
       }
       
+      // Create user
       const user = await storage.createUser(userData);
+      
+      // Generate account number based on account type
+      const accountNumber = generateRandomAccountNumber(accountType);
+      
+      // Determine account name based on account type
+      let accountName;
+      switch (accountType) {
+        case 'savings':
+          accountName = "Savings Account";
+          break;
+        case 'investment':
+          accountName = "Investment Account";
+          break;
+        case 'express':
+          accountName = "Express Transactional Account";
+          break;
+        default:
+          accountName = "Checking Account";
+      }
+      
+      // Create initial account for the user
+      const accountData = {
+        userId: user.id,
+        accountNumber,
+        accountName,
+        accountType,
+        balance: "0",
+        currency: "USD",
+        isCrypto: false
+      };
+      
+      const account = await storage.createAccount(accountData);
       
       // Store user ID in session
       req.session.userId = user.id;
       
-      // Return user data without password
+      // Return user data without password and include the created account
       const { password, ...newUserData } = user;
-      res.status(201).json(newUserData);
+      res.status(201).json({
+        ...newUserData,
+        account
+      });
     } catch (error) {
+      console.error("Registration error:", error);
       res.status(500).json({ message: "An error occurred during registration" });
     }
   });
@@ -181,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Create a new account with random account number
+  // Create a new account with random account number based on account type
   app.post("/api/accounts", requireAuth, async (req, res) => {
     try {
       const validatedData = insertAccountSchema.safeParse(req.body);
@@ -199,8 +239,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      // Generate a random account number
-      const accountNumber = generateRandomAccountNumber();
+      // Extract the account type
+      const { accountType } = validatedData.data;
+      
+      // Generate a random account number based on account type
+      const accountNumber = generateRandomAccountNumber(accountType);
       
       // Create the account data
       const accountData = {
@@ -213,6 +256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const account = await storage.createAccount(accountData);
       res.status(201).json(account);
     } catch (error) {
+      console.error("Account creation error:", error);
       res.status(500).json({ message: "An error occurred while creating account" });
     }
   });
