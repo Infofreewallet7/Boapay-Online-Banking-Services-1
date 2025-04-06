@@ -113,6 +113,11 @@ export interface IStorage {
   // Crypto Account methods
   getUserCryptoAccounts(userId: number): Promise<Account[]>;
   createCryptoAccount(account: InsertAccount): Promise<Account>;
+  
+  // Transaction Categorization methods
+  updateTransactionCategory(id: number, category: string, subcategory?: string, tags?: string[], notes?: string): Promise<Transaction | undefined>;
+  getTransactionCategories(): Promise<string[]>;
+  getTransactionSubcategories(category: string): Promise<string[]>;
 }
 
 import MemoryStore from "memorystore";
@@ -990,7 +995,11 @@ export class MemStorage implements IStorage {
       fees: insertTransaction.fees || null,
       isApproved: insertTransaction.isApproved !== undefined ? insertTransaction.isApproved : false,
       approvedById: insertTransaction.approvedById || null,
-      approvedAt: insertTransaction.approvedAt || null
+      approvedAt: insertTransaction.approvedAt || null,
+      category: insertTransaction.category || null,
+      subcategory: insertTransaction.subcategory || null,
+      tags: insertTransaction.tags || [],
+      notes: insertTransaction.notes || null
     };
     this.transactions.set(id, transaction);
     return transaction;
@@ -1374,6 +1383,67 @@ export class MemStorage implements IStorage {
 
     this.loanApplications.set(id, updatedApplication);
     return updatedApplication;
+  }
+  
+  // Transaction Categorization methods
+  async updateTransactionCategory(id: number, category: string, subcategory?: string, tags?: string[], notes?: string): Promise<Transaction | undefined> {
+    const transaction = this.transactions.get(id);
+    if (!transaction) return undefined;
+    
+    const updatedTransaction: Transaction = {
+      ...transaction,
+      category: category,
+      subcategory: subcategory || null,
+      tags: tags || [],
+      notes: notes || null,
+    };
+    
+    this.transactions.set(id, updatedTransaction);
+    return updatedTransaction;
+  }
+  
+  async getTransactionCategories(): Promise<string[]> {
+    // Return a default set of categories
+    return [
+      "income",
+      "shopping",
+      "food",
+      "utilities",
+      "transportation",
+      "housing",
+      "entertainment",
+      "health",
+      "education",
+      "personal",
+      "travel",
+      "business",
+      "investments",
+      "transfers",
+      "uncategorized"
+    ];
+  }
+  
+  async getTransactionSubcategories(category: string): Promise<string[]> {
+    // Return subcategories based on the main category
+    const subcategories: Record<string, string[]> = {
+      "income": ["salary", "bonus", "interest", "dividends", "gifts", "refunds", "other"],
+      "shopping": ["clothing", "electronics", "groceries", "home", "online", "gifts", "other"],
+      "food": ["restaurants", "fast food", "coffee shops", "groceries", "delivery", "other"],
+      "utilities": ["electricity", "water", "gas", "internet", "phone", "cable", "streaming", "other"],
+      "transportation": ["public transit", "gas", "parking", "car payment", "rideshare", "maintenance", "other"],
+      "housing": ["rent", "mortgage", "insurance", "property tax", "repairs", "furniture", "other"],
+      "entertainment": ["movies", "games", "music", "events", "subscriptions", "hobbies", "other"],
+      "health": ["insurance", "doctor", "pharmacy", "fitness", "other"],
+      "education": ["tuition", "books", "courses", "student loans", "other"],
+      "personal": ["beauty", "self-care", "clothing", "other"],
+      "travel": ["flights", "hotels", "car rental", "activities", "food", "other"],
+      "business": ["office supplies", "marketing", "services", "software", "other"],
+      "investments": ["stocks", "bonds", "crypto", "retirement", "other"],
+      "transfers": ["internal", "external", "other"],
+      "uncategorized": ["other"]
+    };
+    
+    return subcategories[category] || ["other"];
   }
 }
 
